@@ -73,7 +73,7 @@ async function persist(){
   if(LOAD!=="ok")return;
   try{
     const j=cj(S.vehicles);if(j===lastJ)return;
-    await tx("kv","readwrite",s=>s.put(S.vehicles,"vehicles"));lastJ=j;meta.changed=Date.now();await tx("kv","readwrite",s=>s.put(meta,"meta"));fileSync();
+    await tx("kv","readwrite",s=>s.put(S.vehicles,"vehicles"));lastJ=j;meta.changed=Date.now();await tx("kv","readwrite",s=>s.put(meta,"meta"));
     const used=new Set();S.vehicles.forEach(v=>{if(v.photo)used.add(v.photo);(v.records||[]).forEach(r=>(r.photos||[]).forEach(p=>used.add(p)))});
     const dead=Object.keys(PH).filter(k=>!used.has(k));
     if(dead.length){await tx("photos","readwrite",s=>{dead.forEach(k=>s.delete(k))});dead.forEach(k=>delete PH[k])}
@@ -114,37 +114,13 @@ async function driveSave(){
 }
 async function driveLoad(){const c=driveCfg(),{id}=await driveFind(c);if(!id)throw new Error("ficheiro não encontrado na pasta");return(await gApi("https://www.googleapis.com/drive/v3/files/"+id+"?alt=media&supportsAllDrives=true")).json()}
 async function applyData(j){Object.keys(PH).forEach(k=>delete PH[k]);Object.assign(PH,j.photos||{});S.vehicles=j.vehicles;S.sel=null;await tx("photos","readwrite",s=>{s.clear();Object.entries(PH).forEach(([k,v])=>s.put(v,k))});await tx("kv","readwrite",s=>s.put(S.vehicles,"vehicles"));lastJ=cj(S.vehicles)}
-let fsT=null;
-function fileSync(now){
-  if(!window.Android||!Android.hasFile())return;
-  clearTimeout(fsT);
-  fsT=setTimeout(()=>{
-    try{
-      const ok=Android.saveFile(JSON.stringify({app:"garagem",version:1,saved:new Date().toISOString(),vehicles:S.vehicles,photos:PH}));
-      if(ok){meta.lastBackup=Date.now();tx("kv","readwrite",s=>s.put(meta,"meta")).catch(()=>{});banner("Guardado no ficheiro às "+new Date().toLocaleTimeString("pt-PT",{hour:"2-digit",minute:"2-digit"}),true);setTimeout(()=>banner(""),2000)}
-      else banner("Não foi possível escrever no ficheiro. Escolhe-o outra vez em Cópia.");
-    }catch(e){banner("Erro ao escrever no ficheiro.")}
-  },now?0:600);
-}
-async function loadFromFile(say,d){
-  try{const j=JSON.parse(Android.readFile());if(j.app!=="garagem"||!Array.isArray(j.vehicles))throw 0;
-    if(!confirm("Substituir os dados da app pelos do ficheiro?"))return;await applyData(j);d.remove();render()}
-  catch(e){say("Ficheiro vazio ou inválido.")}
-}
-window.onAndroidFile=async mode=>{
-  document.querySelectorAll(".sheet").forEach(s=>s.remove());
-  if(mode==="create"){fileSync(true);return}
-  try{
-    const txt=Android.readFile();let j=null;try{j=JSON.parse(txt)}catch(e){}
-    if(j&&j.app==="garagem"&&Array.isArray(j.vehicles)){
-      if(confirm("O ficheiro tem "+j.vehicles.length+" viatura(s). Carregar os dados do ficheiro para a app?\n\nOK = carregar.\nCancelar = manter os dados atuais e substituir o conteúdo do ficheiro.")){await applyData(j);render();return}
-      if(!confirm("Substituir o conteúdo do ficheiro pelos dados atuais da app?")){Android.clearFile();render();return}
-    }else if(txt.trim()&&!confirm("Este ficheiro não é da Garagem. Substituir o conteúdo?")){Android.clearFile();render();return}
-    fileSync(true);render();
-  }catch(e){banner("Não foi possível ler o ficheiro.")}
-};
 async function autoBackup(){
-  if(window.Android||!S.vehicles.length)return;
+  if(!S.vehicles.length)return;
+  const dc=driveCfg();
+  if(dc.on&&dc.cid){
+    try{await driveSave();const n=new Date();banner("Guardado no Drive às "+n.toLocaleTimeString("pt-PT",{hour:"2-digit",minute:"2-digit"}),true);setTimeout(()=>banner(""),3000)}
+    catch(e){banner("Não foi possível atualizar o Drive: "+e.message+". Podes tentar em Cópia → Enviar agora.")}
+  }
   if(meta.auto!==true)return;
   const data=JSON.stringify({app:"garagem",version:1,saved:new Date().toISOString(),vehicles:S.vehicles,photos:PH});
   const stamp=()=>{meta.lastBackup=Date.now();tx("kv","readwrite",s=>s.put(meta,"meta")).catch(()=>{})};
@@ -169,7 +145,7 @@ async function init(){
     LOAD="ok";render();
   }catch(e){LOAD="off";render()}
 }
-const bkNote=()=>{if(window.Android)return Android.hasFile()?"":`<div class="card" style="background:var(--warnbg)"><strong>Ainda não escolheste o ficheiro de dados</strong><div class="mut">Escolhe onde guardar para que tudo seja gravado sempre no mesmo ficheiro.</div><div class="acts" style="margin-top:8px"><button class="btn sm" onclick="backup()">Escolher ficheiro</button></div></div>`;if(!S.vehicles.length)return"";const lb=meta.lastBackup||0,pend=!lb||((meta.changed||0)>lb&&Date.now()-lb>7*864e5);return pend?`<div class="card" style="background:var(--warnbg)"><strong>Há alterações sem cópia de segurança</strong><div class="mut">${lb?"Última cópia: "+new Date(lb).toLocaleDateString("pt-PT"):"Ainda não guardaste nenhuma cópia."}</div><div class="acts" style="margin-top:8px"><button class="btn sm" onclick="backup()">Guardar cópia</button></div></div>`:""};
+const bkNote=()=>{if(!S.vehicles.length)return"";const lb=meta.lastBackup||0,pend=!lb||((meta.changed||0)>lb&&Date.now()-lb>7*864e5);return pend?`<div class="card" style="background:var(--warnbg)"><strong>Há alterações sem cópia de segurança</strong><div class="mut">${lb?"Última cópia: "+new Date(lb).toLocaleDateString("pt-PT"):"Ainda não guardaste nenhuma cópia."}</div><div class="acts" style="margin-top:8px"><button class="btn sm" onclick="backup()">Guardar cópia</button></div></div>`:""};
 const $=s=>document.querySelector(s);
 const esc=t=>String(t??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const uid=()=>Math.random().toString(36).slice(2,10);
@@ -318,7 +294,7 @@ function editKm(){
 function editRec(id,pre){
   const v=cur(),x=(v.records||[]).find(r=>r.id===id)||pre||{};
   sheet(`<h2>${id?"Editar registo":"Novo registo"}</h2>
-  <label>Tipo</label><select name="type">${TYPES.map(t=>`<option ${t===x.type?"selected":""}>${t}</option>`).join("")}</select>
+  <label>Tipo</label><select name="type">${allTypes().map(t=>`<option ${t===x.type?"selected":""}>${esc(t)}</option>`).join("")}</select>
   <div class="g2"><div><label>Data</label><input name="date" type="date" required value="${x.date||today()}"></div><div><label>Quilómetros</label><input name="km" type="number" inputmode="numeric" value="${x.km??v.km??""}"></div></div>
   <label>Custo (€)</label><input name="cost" type="number" step="0.01" inputmode="decimal" value="${x.cost??""}">
   <label>Notas (oficina, peças, referências…)</label><textarea name="notes" rows="3">${esc(x.notes)}</textarea>
@@ -358,6 +334,11 @@ function planAlerts(v){
   });
 }
 const allAlerts=v=>[...(v.alerts||[]),...planAlerts(v).filter(a=>!a.none)];
+function allTypes(){
+  const extra=[];
+  S.vehicles.forEach(v=>{(v.plan||[]).forEach(p=>extra.push(p.type));(v.records||[]).forEach(r=>extra.push(r.type))});
+  const out=[...TYPES];extra.forEach(t=>{if(t&&!out.includes(t))out.push(t)});return out;
+}
 function planSheet(){
   const v=cur();document.querySelectorAll(".sheet").forEach(s=>s.remove());
   const pa=Object.fromEntries(planAlerts(v).map(a=>[a.planId,a]));
@@ -368,40 +349,56 @@ function planSheet(){
 function editPlan(id){
   const v=cur();document.querySelectorAll(".sheet").forEach(s=>s.remove());
   const p=(v.plan||[]).find(x=>x.id===id)||{};
+  const mode0=p.km&&p.months?"ambos":p.months?"meses":"km";
+  const modeRow=(val,label)=>`<label style="display:flex;gap:8px;align-items:center;font-weight:500"><input type="radio" name="mode" value="${val}" ${mode0===val?"checked":""} style="width:20px;min-height:0" onchange="document.querySelectorAll('.pkm').forEach(e=>e.style.display=(this.value==='km'||this.value==='ambos')?'':'none');document.querySelectorAll('.pmo').forEach(e=>e.style.display=(this.value==='meses'||this.value==='ambos')?'':'none')"> ${label}</label>`;
   sheet(`<h2>${id?"Editar intervenção":"Nova intervenção"}</h2>
-  <label>Tipo</label><select name="type">${TYPES.map(t=>`<option ${t===p.type?"selected":""}>${t}</option>`).join("")}</select>
-  <div class="g2"><div><label>A cada (km)</label><input name="km" type="number" inputmode="numeric" min="0" value="${p.km||""}"></div><div><label>A cada (meses)</label><input name="months" type="number" inputmode="numeric" min="0" value="${p.months||""}"></div></div>
-  <p class="mut">Preenche km, meses ou ambos. O aviso dispara com o que chegar primeiro.</p>
+  <label>Nome da intervenção</label><input name="type" required list="typelist" placeholder="Ex.: Óleo do diferencial" value="${esc(p.type||"")}">
+  <datalist id="typelist">${allTypes().map(t=>`<option value="${esc(t)}">`).join("")}</datalist>
+  <label style="margin-top:14px">Controlar por</label>
+  <div style="display:flex;gap:16px;flex-wrap:wrap;margin-top:4px">${modeRow("km","Quilómetros")}${modeRow("meses","Tempo")}${modeRow("ambos","Ambos")}</div>
+  <div class="g2" style="margin-top:10px">
+  <div class="pkm" style="display:${mode0==="meses"?"none":""}"><label>A cada (km)</label><input name="km" type="number" inputmode="numeric" min="0" value="${p.km||""}"></div>
+  <div class="pmo" style="display:${mode0==="km"?"none":""}"><label>A cada (meses)</label><input name="months" type="number" inputmode="numeric" min="0" value="${p.months||""}"></div>
+  </div>
+  <p class="mut">Com "Ambos", o aviso dispara com o que chegar primeiro.</p>
   <label>Última vez (só se ainda não tens registo)</label><div class="g2"><input name="lastDate" type="date" value="${p.lastDate||""}"><input name="lastKm" type="number" inputmode="numeric" placeholder="km" value="${p.lastKm||""}"></div>
   <div class="acts"><button type="button" class="btn ghost" onclick="planSheet()">Cancelar</button><button class="btn">Guardar</button></div>
   ${id?`<div class="acts"><button type="button" class="btn del" onclick="delPlan('${id}')">Apagar intervenção</button></div>`:""}`,
-  f=>{const o=id?p:{id:uid()};Object.assign(o,{type:f.get("type"),km:Number(f.get("km"))||0,months:Number(f.get("months"))||0,lastDate:f.get("lastDate"),lastKm:Number(f.get("lastKm"))||0});if(!id){v.plan=v.plan||defPlan();v.plan.push(o)}setTimeout(planSheet,50)});
+  f=>{const mode=f.get("mode"),name=(f.get("type")||"").trim();if(!name)return;
+    const km=mode!=="meses"?Number(f.get("km"))||0:0,months=mode!=="km"?Number(f.get("months"))||0:0;
+    if(!km&&!months){alert("Indica km, meses ou ambos.");setTimeout(()=>editPlan(id),50);return}
+    const o=id?p:{id:uid()};
+    Object.assign(o,{type:name,km,months,lastDate:f.get("lastDate"),lastKm:Number(f.get("lastKm"))||0});
+    if(!id){v.plan=v.plan||defPlan();v.plan.push(o)}setTimeout(planSheet,50)});
 }
 function delPlan(id){const v=cur();v.plan=v.plan.filter(p=>p.id!==id);render();planSheet()}
 function zoom(s){const l=$("#lb");l.querySelector("img").src=s;l.style.display="grid"}
 function backup(){
   const DC=driveCfg(),last=meta.lastBackup?new Date(meta.lastBackup).toLocaleDateString("pt-PT"):"nunca";
-  const d=sheet(`<h2>Cópia de segurança</h2>${window.Android?"":`<p class="mut">Os dados e as fotografias ficam guardados neste telemóvel, dentro do browser. Uma página web não consegue atualizar um ficheiro que já existe no Android, por isso cada cópia é um ficheiro novo. Guarda uma cópia de vez em quando (por exemplo depois de uma revisão), copia-a para o Drive ou para o computador e apaga as antigas.</p>`}
+  const d=sheet(`<h2>Cópia de segurança</h2><p class="mut">Os dados e as fotografias ficam guardados neste telemóvel, dentro do browser. Uma página web não consegue atualizar um ficheiro que já existe no Android, por isso cada cópia é um ficheiro novo. Guarda uma cópia de vez em quando (por exemplo depois de uma revisão), copia-a para o Drive ou para o computador e apaga as antigas.</p>
   <label style="display:flex;gap:10px;align-items:center"><input type="checkbox" id="au" ${meta.auto?"checked":""} style="width:22px;min-height:0"> Criar também um ficheiro a cada Guardar (não recomendado: cria muitos ficheiros)</label><p>Última cópia: <strong>${last}</strong></p>
-  ${window.Android?`<h3 style="margin:14px 0 4px">Ficheiro de dados</h3><p class="mut">A app grava sempre no mesmo ficheiro, sem criar cópias novas, sempre que guardas ou alteras algo.</p><p><strong>Ficheiro:</strong> ${esc(Android.fileName()||"nenhum escolhido")}</p>
-  <div class="acts"><button type="button" class="btn" id="afn">Criar ficheiro novo</button><button type="button" class="btn ghost" id="afo">Escolher existente</button></div>
-  <div class="acts"><button type="button" class="btn ghost" id="afs">Guardar agora</button><button type="button" class="btn ghost" id="afl">Carregar do ficheiro</button></div><div id="amsg" class="mut" style="margin-bottom:8px"></div>`:""}
+  <h3 style="margin:14px 0 4px">Google Drive</h3>
+  ${location.protocol==="file:"?`<p class="mut" style="color:var(--warn)">Atenção: a Google só aceita esta ligação se a app estiver aberta a partir de um endereço https (por exemplo alojada no Netlify ou no GitHub Pages). A partir de um ficheiro local não funciona.</p>`:""}
+  <label>Link da pasta do Drive</label><input id="df" value="${esc(DC.folder)}" placeholder="https://drive.google.com/drive/folders/…">
+  <label>Nome do ficheiro</label><input id="dn" value="${esc(DC.name)}">
+  <label>Google Client ID</label><input id="dc" value="${esc(DC.cid)}" placeholder="xxxx.apps.googleusercontent.com">
+  <label style="display:flex;gap:10px;align-items:center"><input type="checkbox" id="do" ${DC.on?"checked":""} style="width:22px;min-height:0"> Atualizar o ficheiro no Drive a cada Guardar</label>
+  <div class="acts"><button type="button" class="btn" id="dsv">Guardar configuração</button></div>
+  <div class="acts"><button type="button" class="btn ghost" id="dup">Enviar agora</button><button type="button" class="btn ghost" id="ddn">Restaurar do Drive</button></div>
+  <div id="dmsg" class="mut" style="margin-bottom:8px"></div>
+  <h3 style="margin:14px 0 4px">Cópia em ficheiro</h3>
   ${window.showSaveFilePicker?`<div class="acts"><button type="button" class="btn ghost" id="lf">${fh?"Trocar ficheiro de cópia":"Escolher ficheiro único de cópia"}</button></div>${fh?`<p class="mut">Ficheiro ligado: ${esc(fh.name)}. Cada Guardar atualiza este ficheiro.</p>`:""}`:""}
   <div class="acts"><button type="button" class="btn" id="ex">Guardar / partilhar cópia</button></div>
   <label>Importar cópia (substitui os dados deste telemóvel)</label><input type="file" id="im" accept=".json,application/json">
   <div class="acts"><button type="button" class="btn ghost" data-close>Fechar</button></div>`,()=>{});
-  if(window.Android){
-    const say=x=>{d.querySelector("#amsg").textContent=x};
-    d.querySelector("#afn").onclick=()=>Android.createFile();
-    d.querySelector("#afo").onclick=()=>Android.pickFile();
-    d.querySelector("#afs").onclick=()=>{if(!Android.hasFile()){say("Escolhe primeiro o ficheiro.");return}fileSync(true);d.remove()};
-    d.querySelector("#afl").onclick=()=>loadFromFile(say,d);
-    const e1=d.querySelector("#ex");if(e1)e1.closest(".acts").remove();
-    const e2=d.querySelector("#au");if(e2)e2.closest("label").remove();
-  }
+  const rd=()=>{meta.drive={folder:d.querySelector("#df").value.trim(),name:d.querySelector("#dn").value.trim()||"garagem-dados.json",cid:d.querySelector("#dc").value.trim(),on:d.querySelector("#do").checked};return tx("kv","readwrite",s=>s.put(meta,"meta"))};
+  const dm=d.querySelector("#dmsg"),say=x=>{dm.textContent=x};
+  d.querySelector("#dsv").onclick=async()=>{if(!folderId(d.querySelector("#df").value)){say("Link da pasta inválido.");return}await rd();say("Configuração guardada.")};
+  d.querySelector("#dup").onclick=async()=>{try{if(!folderId(d.querySelector("#df").value))throw new Error("link da pasta inválido");await rd();say("A enviar…");await driveSave();say("Ficheiro atualizado no Drive.");render()}catch(e){say("Falhou: "+e.message)}};
+  d.querySelector("#ddn").onclick=async()=>{try{if(!folderId(d.querySelector("#df").value))throw new Error("link da pasta inválido");await rd();say("A procurar no Drive…");const j=await driveLoad();if(j.app!=="garagem"||!Array.isArray(j.vehicles))throw new Error("ficheiro inválido");if(!confirm("Substituir os dados deste telemóvel pelos do Drive?"))return;await applyData(j);d.remove();render()}catch(e){say("Falhou: "+e.message)}};
   d.querySelector("#lf")?.addEventListener("click",async()=>{try{fh=await showSaveFilePicker({suggestedName:"garagem-dados.json",types:[{description:"Garagem",accept:{"application/json":[".json"]}}]});await tx("kv","readwrite",s=>s.put(fh,"fh"));d.remove();render();autoBackup()}catch(e){}});
-  if(d.querySelector("#au"))d.querySelector("#au").onchange=async e=>{meta.auto=e.target.checked;try{await tx("kv","readwrite",s=>s.put(meta,"meta"))}catch(x){}};
-  if(d.querySelector("#ex"))d.querySelector("#ex").onclick=async()=>{
+  d.querySelector("#au").onchange=async e=>{meta.auto=e.target.checked;try{await tx("kv","readwrite",s=>s.put(meta,"meta"))}catch(x){}};
+  d.querySelector("#ex").onclick=async()=>{
     const name="garagem-"+today()+".json",blob=new Blob([JSON.stringify({app:"garagem",version:1,vehicles:S.vehicles,photos:PH})],{type:"application/json"}),f=new File([blob],name,{type:"application/json"});
     try{
       if(navigator.canShare&&navigator.canShare({files:[f]}))await navigator.share({files:[f],title:"Garagem"});else throw 0;
