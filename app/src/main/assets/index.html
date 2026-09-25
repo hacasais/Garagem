@@ -1,0 +1,429 @@
+<!DOCTYPE html>
+<html lang="pt-PT">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Garagem</title><meta name="theme-color" content="#0F4C4A">
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Barlow:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#EEF1F0;--card:#fff;--ink:#16211F;--mut:#5E6D69;--line:#D5DCDA;--pri:#0F4C4A;--onpri:#fff;--warn:#B77700;--warnbg:#FBEFD2;--bad:#B3261E;--badbg:#FADBD8;--ok:#1E7A4C;--okbg:#D9F0E3;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0F1615;--card:#182321;--ink:#E8EFED;--mut:#93A5A0;--line:#2A3A37;--pri:#5CC2B8;--onpri:#08201D;--warn:#F0B84A;--warnbg:#3A2E10;--bad:#FF8A80;--badbg:#3F1B18;--ok:#6FD3A0;--okbg:#153524}}
+:root[data-theme="dark"]{--bg:#0F1615;--card:#182321;--ink:#E8EFED;--mut:#93A5A0;--line:#2A3A37;--pri:#5CC2B8;--onpri:#08201D;--warn:#F0B84A;--warnbg:#3A2E10;--bad:#FF8A80;--badbg:#3F1B18;--ok:#6FD3A0;--okbg:#153524}
+*{box-sizing:border-box}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+html,body{margin:0}
+body{background:var(--bg);color:var(--ink);font:16px/1.45 Barlow,system-ui,-apple-system,"Segoe UI",sans-serif;min-height:100vh}
+h1,h2,h3,.num{font-family:"Barlow Condensed","Arial Narrow",sans-serif;font-weight:600;margin:0;letter-spacing:.01em}
+main{max-width:560px;margin:0 auto;padding:16px 16px 96px}
+button,input,select,textarea{font:inherit;color:inherit}
+button{cursor:pointer}
+.btn{background:var(--pri);color:var(--onpri);border:0;border-radius:10px;padding:12px 18px;font-weight:600;min-height:44px}
+.btn.ghost{background:transparent;color:var(--pri);border:1.5px solid var(--pri)}
+.btn.sm{padding:6px 12px;min-height:34px;font-size:14px}
+.btn.del{background:transparent;color:var(--bad);border:1.5px solid var(--bad)}
+.top{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:14px}
+.top h1{font-size:30px}
+.plate{display:inline-flex;align-items:stretch;border:2px solid var(--ink);border-radius:6px;overflow:hidden;background:#fff;color:#111;font-family:"Barlow Condensed",sans-serif;font-weight:700;font-size:20px;letter-spacing:.08em}
+.plate i{background:#0A3D91;color:#fff;font-style:normal;font-size:11px;padding:2px 5px;display:flex;align-items:flex-end}
+.plate b{padding:1px 10px;font-weight:700}
+.veh{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:12px;margin-bottom:12px;cursor:pointer}.vtop{display:flex;gap:12px;align-items:center}.chev{font-size:30px;color:var(--mut)}.vsum{border-top:1px solid var(--line);margin-top:10px;padding-top:8px}.arow{display:flex;justify-content:space-between;gap:8px;align-items:center;padding:3px 0;font-weight:500}#bn{display:none;position:sticky;top:0;z-index:8;background:var(--badbg);color:var(--bad);padding:8px 12px;font-size:14px;text-align:center}
+.thumb{width:64px;height:64px;border-radius:10px;background:var(--line);object-fit:cover;flex:none;display:grid;place-items:center;color:var(--mut);font-size:26px}
+.veh h2{font-size:22px}
+.mut{color:var(--mut);font-size:14px}
+.tabs{display:flex;gap:4px;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:4px;margin:14px 0}
+.tabs button{flex:1;border:0;background:transparent;padding:9px 4px;border-radius:9px;font-weight:600;color:var(--mut)}
+.tabs button[aria-selected="true"]{background:var(--pri);color:var(--onpri)}
+.hero{background:var(--pri);color:var(--onpri);border-radius:16px;padding:16px;display:flex;gap:14px;align-items:center}
+.hero .num{font-size:52px;line-height:1}
+.hero .thumb{background:rgba(255,255,255,.18);color:inherit}
+.stats{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:12px 0}
+.stat{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px}
+.stat .num{font-size:28px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px;margin-bottom:10px}
+.row{display:flex;justify-content:space-between;gap:8px;align-items:flex-start}
+.tag{display:inline-block;font-size:13px;font-weight:600;border-radius:99px;padding:2px 10px;background:var(--line)}
+.tag.bad{background:var(--badbg);color:var(--bad)}.tag.warn{background:var(--warnbg);color:var(--warn)}.tag.ok{background:var(--okbg);color:var(--ok)}
+.photos{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+.photos img{width:64px;height:64px;object-fit:cover;border-radius:8px;cursor:zoom-in}
+.fab{position:fixed;right:16px;bottom:calc(16px + env(safe-area-inset-bottom,0px));box-shadow:0 4px 14px rgba(0,0,0,.3);border-radius:99px;padding:14px 22px}
+.sheet{position:fixed;inset:0;background:rgba(0,0,0,.5);display:flex;align-items:flex-end;justify-content:center;z-index:5}
+.sheet form,.sheet .box{background:var(--card);width:100%;max-width:560px;max-height:92%;overflow:auto;border-radius:18px 18px 0 0;padding:18px 16px calc(18px + env(safe-area-inset-bottom,0px))}
+label{display:block;font-weight:600;font-size:14px;margin:12px 0 4px}
+input,select,textarea{width:100%;background:var(--bg);border:1.5px solid var(--line);border-radius:10px;padding:10px 12px;min-height:44px}
+:focus-visible{outline:3px solid var(--pri);outline-offset:2px}
+.g2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.acts{display:flex;gap:8px;margin-top:16px}.acts .btn{flex:1}
+.empty{text-align:center;color:var(--mut);padding:28px 12px;border:1.5px dashed var(--line);border-radius:12px}
+#lb{position:fixed;inset:0;background:#000d;display:none;place-items:center;z-index:9}#lb img{max-width:96%;max-height:90%;border-radius:8px}
+</style>
+</head>
+<body>
+<div id="bn" role="alert"></div><main id="app"></main>
+<div id="lb" onclick="this.style.display='none'"><img alt="Fotografia ampliada"></div>
+<script>
+const TYPES=["Revisão","Óleo e filtros","Pneus","Rotação de pneus","Travões","Bateria","Inspeção (IPO)","Seguro","Reparação","Alteração / extra","Lavagem / estética","Combustível","Outro"];
+const ASSETS=true,PH={},removed=new Set();
+let S={vehicles:[],sel:null,tab:"resumo"},LOAD="loading",lastJ="",meta={},q=Promise.resolve();
+const cj=o=>JSON.stringify(o,(k,v)=>v&&typeof v==="object"&&!Array.isArray(v)?Object.fromEntries(Object.entries(v).sort()):v);
+const idb=new Promise((res,rej)=>{const r=indexedDB.open("garagem",1);r.onupgradeneeded=()=>{r.result.createObjectStore("kv");r.result.createObjectStore("photos")};r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error)});
+async function tx(store,mode,fn){const d=await idb;return new Promise((res,rej)=>{const t=d.transaction(store,mode);const o=fn(t.objectStore(store));t.oncomplete=()=>res(o&&o.result);t.onerror=t.onabort=()=>rej(t.error)})}
+function banner(m,ok){const b=document.getElementById("bn");b.textContent=m;b.style.display=m?"block":"none";b.style.background=ok?"var(--okbg)":"var(--badbg)";b.style.color=ok?"var(--ok)":"var(--bad)"}
+function save(){q=q.then(persist)}
+async function persist(){
+  if(LOAD!=="ok")return;
+  try{
+    const j=cj(S.vehicles);if(j===lastJ)return;
+    await tx("kv","readwrite",s=>s.put(S.vehicles,"vehicles"));lastJ=j;meta.changed=Date.now();await tx("kv","readwrite",s=>s.put(meta,"meta"));fileSync();
+    const used=new Set();S.vehicles.forEach(v=>{if(v.photo)used.add(v.photo);(v.records||[]).forEach(r=>(r.photos||[]).forEach(p=>used.add(p)))});
+    const dead=Object.keys(PH).filter(k=>!used.has(k));
+    if(dead.length){await tx("photos","readwrite",s=>{dead.forEach(k=>s.delete(k))});dead.forEach(k=>delete PH[k])}
+    banner("");
+  }catch(e){banner("Não foi possível guardar neste telemóvel. Exporta já uma cópia de segurança.")}
+}
+let fh=null;
+const driveCfg=()=>Object.assign({folder:"https://drive.google.com/drive/u/1/folders/1CA01qCcL4z_J6ddXUPLAAjB7QeOZhciR",cid:"",name:"garagem-dados.json",on:false},meta.drive||{});
+const folderId=u=>{u=String(u||"").trim();const m=u.match(/folders\/([\w-]+)/)||u.match(/[?&]id=([\w-]+)/);return m?m[1]:(/^[\w-]{20,}$/.test(u)?u:null)};
+let gTok=null,gExp=0;
+async function gToken(){
+  const c=driveCfg();
+  if(location.protocol==="file:")throw new Error("abre a app a partir de um endereço https (a Google não aceita ficheiros locais)");
+  if(!c.cid)throw new Error("falta o Client ID");
+  if(gTok&&Date.now()<gExp)return gTok;
+  if(!window.google||!google.accounts)await new Promise((ok,ko)=>{const s=document.createElement("script");s.src="https://accounts.google.com/gsi/client";s.onload=ok;s.onerror=()=>ko(new Error("sem internet"));document.head.appendChild(s)});
+  return new Promise((ok,ko)=>{
+    google.accounts.oauth2.initTokenClient({client_id:c.cid,scope:"https://www.googleapis.com/auth/drive",
+      callback:r=>{if(r.error)ko(new Error(r.error));else{gTok=r.access_token;gExp=Date.now()+(r.expires_in-60)*1000;ok(gTok)}},
+      error_callback:e=>ko(new Error(e.type||"autorização recusada"))}).requestAccessToken({prompt:""});
+  });
+}
+async function gApi(url,opt={}){const tk=await gToken();const r=await fetch(url,{...opt,headers:{Authorization:"Bearer "+tk,...(opt.headers||{})}});if(!r.ok)throw new Error("Drive "+r.status);return r}
+async function driveFind(c){
+  const fid=folderId(c.folder);if(!fid)throw new Error("link da pasta inválido");
+  const q=encodeURIComponent("name='"+c.name.replace(/'/g,"\\'")+"' and '"+fid+"' in parents and trashed=false");
+  const r=await gApi("https://www.googleapis.com/drive/v3/files?q="+q+"&fields=files(id)&supportsAllDrives=true&includeItemsFromAllDrives=true");
+  const f=(await r.json()).files||[];return{fid,id:f[0]&&f[0].id};
+}
+async function driveSave(){
+  const c=driveCfg(),{fid,id}=await driveFind(c);
+  const data=JSON.stringify({app:"garagem",version:1,saved:new Date().toISOString(),vehicles:S.vehicles,photos:PH});
+  const base="https://www.googleapis.com/upload/drive/v3/files";
+  const init=await gApi((id?base+"/"+id:base)+"?uploadType=resumable&supportsAllDrives=true",{method:id?"PATCH":"POST",headers:{"Content-Type":"application/json; charset=UTF-8","X-Upload-Content-Type":"application/json"},body:JSON.stringify(id?{}:{name:c.name,parents:[fid]})});
+  const loc=init.headers.get("Location");if(!loc)throw new Error("sem sessão de envio");
+  const up=await fetch(loc,{method:"PUT",headers:{"Content-Type":"application/json"},body:data});if(!up.ok)throw new Error("envio "+up.status);
+  meta.lastBackup=Date.now();try{await tx("kv","readwrite",s=>s.put(meta,"meta"))}catch(e){}
+}
+async function driveLoad(){const c=driveCfg(),{id}=await driveFind(c);if(!id)throw new Error("ficheiro não encontrado na pasta");return(await gApi("https://www.googleapis.com/drive/v3/files/"+id+"?alt=media&supportsAllDrives=true")).json()}
+async function applyData(j){Object.keys(PH).forEach(k=>delete PH[k]);Object.assign(PH,j.photos||{});S.vehicles=j.vehicles;S.sel=null;await tx("photos","readwrite",s=>{s.clear();Object.entries(PH).forEach(([k,v])=>s.put(v,k))});await tx("kv","readwrite",s=>s.put(S.vehicles,"vehicles"));lastJ=cj(S.vehicles)}
+let fsT=null;
+function fileSync(now){
+  if(!window.Android||!Android.hasFile())return;
+  clearTimeout(fsT);
+  fsT=setTimeout(()=>{
+    try{
+      const ok=Android.saveFile(JSON.stringify({app:"garagem",version:1,saved:new Date().toISOString(),vehicles:S.vehicles,photos:PH}));
+      if(ok){meta.lastBackup=Date.now();tx("kv","readwrite",s=>s.put(meta,"meta")).catch(()=>{});banner("Guardado no ficheiro às "+new Date().toLocaleTimeString("pt-PT",{hour:"2-digit",minute:"2-digit"}),true);setTimeout(()=>banner(""),2000)}
+      else banner("Não foi possível escrever no ficheiro. Escolhe-o outra vez em Cópia.");
+    }catch(e){banner("Erro ao escrever no ficheiro.")}
+  },now?0:600);
+}
+async function loadFromFile(say,d){
+  try{const j=JSON.parse(Android.readFile());if(j.app!=="garagem"||!Array.isArray(j.vehicles))throw 0;
+    if(!confirm("Substituir os dados da app pelos do ficheiro?"))return;await applyData(j);d.remove();render()}
+  catch(e){say("Ficheiro vazio ou inválido.")}
+}
+window.onAndroidFile=async mode=>{
+  document.querySelectorAll(".sheet").forEach(s=>s.remove());
+  if(mode==="create"){fileSync(true);return}
+  try{
+    const txt=Android.readFile();let j=null;try{j=JSON.parse(txt)}catch(e){}
+    if(j&&j.app==="garagem"&&Array.isArray(j.vehicles)){
+      if(confirm("O ficheiro tem "+j.vehicles.length+" viatura(s). Carregar os dados do ficheiro para a app?\n\nOK = carregar.\nCancelar = manter os dados atuais e substituir o conteúdo do ficheiro.")){await applyData(j);render();return}
+      if(!confirm("Substituir o conteúdo do ficheiro pelos dados atuais da app?")){Android.clearFile();render();return}
+    }else if(txt.trim()&&!confirm("Este ficheiro não é da Garagem. Substituir o conteúdo?")){Android.clearFile();render();return}
+    fileSync(true);render();
+  }catch(e){banner("Não foi possível ler o ficheiro.")}
+};
+async function autoBackup(){
+  if(window.Android||!S.vehicles.length)return;
+  if(meta.auto!==true)return;
+  const data=JSON.stringify({app:"garagem",version:1,saved:new Date().toISOString(),vehicles:S.vehicles,photos:PH});
+  const stamp=()=>{meta.lastBackup=Date.now();tx("kv","readwrite",s=>s.put(meta,"meta")).catch(()=>{})};
+  if(fh){
+    try{
+      if(await fh.queryPermission({mode:"readwrite"})!=="granted"&&await fh.requestPermission({mode:"readwrite"})!=="granted")throw 0;
+      const w=await fh.createWritable();await w.write(data);await w.close();stamp();return;
+    }catch(e){banner("Não consegui atualizar o ficheiro escolhido. Foi descarregada uma cópia nova.")}
+  }
+  try{
+    const a=document.createElement("a");a.href=URL.createObjectURL(new Blob([data],{type:"application/json"}));a.download="garagem-dados-"+today()+".json";document.body.appendChild(a);a.click();a.remove();stamp();
+  }catch(e){banner("Não foi possível criar o ficheiro de cópia.")}
+}
+async function init(){
+  try{
+    S.vehicles=(await tx("kv","readonly",s=>s.get("vehicles")))||[];lastJ=cj(S.vehicles);
+    meta=(await tx("kv","readonly",s=>s.get("meta")))||{};
+    try{fh=(await tx("kv","readonly",s=>s.get("fh")))||null}catch(e){}
+    const d=await idb;
+    await new Promise(res=>{const c=d.transaction("photos").objectStore("photos").openCursor();c.onsuccess=()=>{const u=c.result;if(u){PH[u.key]=u.value;u.continue()}else res()};c.onerror=()=>res()});
+    try{navigator.storage&&navigator.storage.persist&&navigator.storage.persist()}catch(e){}
+    LOAD="ok";render();
+  }catch(e){LOAD="off";render()}
+}
+const bkNote=()=>{if(window.Android)return Android.hasFile()?"":`<div class="card" style="background:var(--warnbg)"><strong>Ainda não escolheste o ficheiro de dados</strong><div class="mut">Escolhe onde guardar para que tudo seja gravado sempre no mesmo ficheiro.</div><div class="acts" style="margin-top:8px"><button class="btn sm" onclick="backup()">Escolher ficheiro</button></div></div>`;if(!S.vehicles.length)return"";const lb=meta.lastBackup||0,pend=!lb||((meta.changed||0)>lb&&Date.now()-lb>7*864e5);return pend?`<div class="card" style="background:var(--warnbg)"><strong>Há alterações sem cópia de segurança</strong><div class="mut">${lb?"Última cópia: "+new Date(lb).toLocaleDateString("pt-PT"):"Ainda não guardaste nenhuma cópia."}</div><div class="acts" style="margin-top:8px"><button class="btn sm" onclick="backup()">Guardar cópia</button></div></div>`:""};
+const $=s=>document.querySelector(s);
+const esc=t=>String(t??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const uid=()=>Math.random().toString(36).slice(2,10);
+const fmtKm=n=>(Number(n)||0).toLocaleString("pt-PT")+" km";
+const fmtEur=n=>(Number(n)||0).toLocaleString("pt-PT",{style:"currency",currency:"EUR"});
+const fmtD=d=>d?new Date(d+"T12:00").toLocaleDateString("pt-PT"):"";
+const today=()=>new Date().toISOString().slice(0,10);
+const cur=()=>S.vehicles.find(v=>v.id===S.sel);
+
+function alertInfo(a,v){
+  let days=a.date?Math.round((new Date(a.date+"T12:00")-new Date(today()+"T12:00"))/864e5):null;
+  let kmL=a.km?Number(a.km)-Number(v.km||0):null;
+  let lvl=0,txt=[];
+  if(days!==null){txt.push(days<0?`há ${-days} dias`:days===0?"hoje":`em ${days} dias`);if(days<0)lvl=2;else if(days<=30)lvl=Math.max(lvl,1)}
+  if(kmL!==null){txt.push(kmL<=0?`passou ${fmtKm(-kmL)}`:`faltam ${fmtKm(kmL)}`);if(kmL<=0)lvl=2;else if(kmL<=1000)lvl=Math.max(lvl,1)}
+  return{lvl,days,kmL,txt:txt.join(" · "),score:lvl*1e6-(days??999)}
+}
+function render(){
+  if(LOAD==="loading"){$("#app").innerHTML=`<div class="empty">A carregar a tua garagem…</div>`;return}
+  if(LOAD==="off"){$("#app").innerHTML=`<div class="empty">Este browser não permite guardar dados locais.<br>Abre o ficheiro com o Chrome (Android) ou o Safari (iPhone), fora do modo privado.</div>`;return}
+  save();
+  const v=cur();
+  $("#app").innerHTML=v?vehicleView(v):listView();
+}
+const src=p=>p?(PH[p]||""):"";
+const thumb=v=>v.photo?`<img class="thumb" src="${src(v.photo)}" alt="">`:`<div class="thumb">🚗</div>`;
+const near=(a,v)=>{const i=alertInfo(a,v);return((i.days!==null&&i.days<=60)||(i.kmL!==null&&i.kmL<=2000))?i:null};
+const openV=id=>{S.sel=id;S.tab="resumo";render()};
+function listView(){
+  const n=S.vehicles.reduce((s,v)=>s+allAlerts(v).filter(a=>near(a,v)).length,0);
+  return `<div class="top"><h1>Garagem</h1><button class="btn ghost sm" onclick="backup()">Cópia</button></div>
+  ${bkNote()}
+  ${n?`<p class="mut" style="margin:0 0 12px">${n} aviso${n>1?"s":""} nos próximos 2 meses (ou a menos de 2 000 km)</p>`:""}
+  ${S.vehicles.length?S.vehicles.map(vcard).join(""):`<div class="empty">Ainda não tens nenhuma viatura.<br>Adiciona a primeira para começar a registar.</div>`}
+  <button class="btn fab" onclick="editVeh()">+ Viatura</button>`;
+}
+function vcard(v){
+  const l=allAlerts(v).map(a=>({a,i:near(a,v)})).filter(x=>x.i).sort((x,y)=>y.i.score-x.i.score);
+  const yr=String(new Date().getFullYear()),cost=(v.records||[]).filter(r=>(r.date||"").startsWith(yr)).reduce((s,r)=>s+(Number(r.cost)||0),0);
+  return `<div class="veh" role="button" tabindex="0" onclick="openV('${v.id}')" onkeydown="if(event.key==='Enter')openV('${v.id}')">
+  <div class="vtop">${thumb(v)}<div style="flex:1;min-width:0"><h2>${esc(v.name)}</h2><div class="mut">${v.year?esc(v.year)+" · ":""}${fmtKm(v.km)} · ${fmtEur(cost)} em ${yr}</div>${v.plate?plate(v.plate):""}</div><span class="chev">›</span></div>
+  <div class="vsum">${l.length?l.slice(0,3).map(x=>`<div class="arow"><span>${esc(x.a.title)}</span><span class="tag ${["ok","warn","bad"][x.i.lvl]}">${x.i.txt}</span></div>`).join("")+(l.length>3?`<div class="mut">+${l.length-3} mais</div>`:""):`<div class="mut">Sem avisos nos próximos 2 meses</div>`}</div></div>`;
+}
+const plate=p=>`<span class="plate" style="margin-top:6px"><i>P</i><b>${esc(p.toUpperCase())}</b></span>`;
+function vehicleView(v){
+  const tabs=[["resumo","Resumo"],["registos","Registos"],["avisos","Avisos"]];
+  let body="";
+  if(S.tab==="resumo")body=resumo(v);else if(S.tab==="registos")body=registos(v);else body=avisos(v);
+  const fab=S.tab==="avisos"?`<button class="btn fab" onclick="editAlert()">+ Aviso</button>`:`<button class="btn fab" onclick="editRec()">+ Registo</button>`;
+  return `<div class="top"><button class="btn ghost sm" onclick="S.sel=null;render()">‹ Viaturas</button><button class="btn ghost sm" onclick="editVeh('${v.id}')">Editar</button></div>
+  <div class="hero">${thumb(v)}<div><h1 style="font-size:26px">${esc(v.name)}</h1><div class="num">${(Number(v.km)||0).toLocaleString("pt-PT")} <span style="font-size:20px">km</span></div>${v.plate?plate(v.plate):""}</div></div>
+  <div class="tabs" role="tablist">${tabs.map(t=>`<button role="tab" aria-selected="${S.tab===t[0]}" onclick="S.tab='${t[0]}';render()">${t[1]}</button>`).join("")}</div>${body}${fab}`;
+}
+function resumo(v){
+  const r=v.records||[],tot=r.reduce((s,x)=>s+(Number(x.cost)||0),0);
+  const yr=new Date().getFullYear(),ty=r.filter(x=>(x.date||"").startsWith(yr)).reduce((s,x)=>s+(Number(x.cost)||0),0);
+  const al=allAlerts(v).map(a=>({a,i:alertInfo(a,v)})).sort((x,y)=>y.i.score-x.i.score).slice(0,3);
+  const last=[...r].sort((a,b)=>b.date.localeCompare(a.date))[0];
+  return `<div class="stats"><div class="stat"><div class="mut">Gasto total</div><div class="num">${fmtEur(tot)}</div></div><div class="stat"><div class="mut">Gasto em ${yr}</div><div class="num">${fmtEur(ty)}</div></div>
+  <div class="stat"><div class="mut">Registos</div><div class="num">${r.length}</div></div><div class="stat"><div class="mut">Última intervenção</div><div class="num" style="font-size:22px">${last?fmtD(last.date):"—"}</div></div></div>
+  <h3 style="margin:16px 0 8px">Próximos avisos</h3>${al.length?al.map(x=>alertCard(x.a,x.i)).join(""):`<div class="empty">Sem avisos. Cria um para não esqueceres a próxima revisão ou inspeção.</div>`}
+  <div class="acts"><button class="btn ghost" onclick="editKm()">Atualizar km</button></div>`;
+}
+function registos(v){
+  const r=[...(v.records||[])].sort((a,b)=>b.date.localeCompare(a.date)||b.km-a.km);
+  if(!r.length)return `<div class="empty">Sem registos. Guarda aqui revisões, reparações, alterações e fotografias.</div>`;
+  return r.map(x=>`<div class="card"><div class="row"><div><strong>${esc(x.type)}</strong><div class="mut">${fmtD(x.date)}${x.km?" · "+fmtKm(x.km):""}</div></div><div class="num" style="font-size:22px">${x.cost?fmtEur(x.cost):""}</div></div>
+  ${x.notes?`<p style="margin:8px 0 0">${esc(x.notes)}</p>`:""}
+  ${(x.photos||[]).length?`<div class="photos">${x.photos.map((p,i)=>`<img src="${src(p)}" alt="Fotografia ${i+1}" onclick="zoom(this.src)">`).join("")}</div>`:""}
+  <div class="acts" style="margin-top:10px"><button class="btn ghost sm" onclick="editRec('${x.id}')">Editar</button></div></div>`).join("");
+}
+function alertCard(a,i){
+  const c=["ok","warn","bad"][i.lvl];
+  return `<div class="card"><div class="row"><div><strong>${esc(a.title)}</strong><div class="mut">${a.date?"Data: "+fmtD(a.date):""}${a.date&&a.km?" · ":""}${a.km?"Aos "+fmtKm(a.km):""}</div></div><span class="tag ${c}">${i.txt}</span></div>
+  <div class="acts" style="margin-top:10px"><button class="btn sm" onclick="doneAlert('${a.id}')">Concluir</button><button class="btn ghost sm" onclick="${a.derived?`editPlan('${a.planId}')`:`editAlert('${a.id}')`}">Editar</button></div></div>`;
+}
+function avisos(v){
+  const l=allAlerts(v).map(a=>({a,i:alertInfo(a,v)})).sort((x,y)=>y.i.score-x.i.score);
+  return `<div class="acts" style="margin:0 0 12px"><button class="btn ghost" onclick="planSheet()">Plano de manutenção</button></div>`+(l.length?l.map(x=>alertCard(x.a,x.i)).join(""):`<div class="empty">Sem avisos. No plano de manutenção defines de quanto em quanto tempo ou km fazes cada intervenção; os avisos surgem depois de registares a última vez.</div>`);
+}
+function sheet(html,onsubmit){
+  const d=document.createElement("div");d.className="sheet";d.innerHTML=`<form>${html}</form>`;
+  d.onclick=e=>{if(e.target===d)d.remove()};
+  d.querySelector("form").onsubmit=async e=>{e.preventDefault();await onsubmit(new FormData(e.target),e.target);d.remove();render();autoBackup()};
+  d.querySelectorAll("[data-close]").forEach(b=>b.onclick=()=>d.remove());
+  document.body.appendChild(d);return d;
+}
+async function shrink(file){
+  return new Promise(res=>{const im=new Image();im.onload=()=>{const s=Math.min(1,1000/Math.max(im.width,im.height));const c=document.createElement("canvas");c.width=im.width*s;c.height=im.height*s;c.getContext("2d").drawImage(im,0,0,c.width,c.height);URL.revokeObjectURL(im.src);res(c.toDataURL("image/jpeg",.7))};im.onerror=()=>res(null);im.src=URL.createObjectURL(file)});
+}
+async function files(form,name){const out=[];for(const f of form.querySelector(`[name=${name}]`).files){const u=await shrink(f);if(!u)continue;const id=uid()+uid();PH[id]=u;try{await tx("photos","readwrite",s=>s.put(u,id));out.push(id)}catch(e){delete PH[id];banner("Não foi possível guardar uma fotografia.")}}return out}
+function editVeh(id){
+  const v=S.vehicles.find(x=>x.id===id)||{};
+  sheet(`<h2>${id?"Editar viatura":"Nova viatura"}</h2>
+  <label>Nome</label><input name="name" required placeholder="Ex.: Golf do dia a dia" value="${esc(v.name)}">
+  <div class="g2"><div><label>Matrícula</label><input name="plate" placeholder="00-AA-00" value="${esc(v.plate)}"></div><div><label>Ano</label><input name="year" inputmode="numeric" value="${esc(v.year)}"></div></div>
+  <label>Quilómetros atuais</label><input name="km" type="number" inputmode="numeric" min="0" value="${v.km??""}">
+  ${ASSETS?`<label>Fotografia</label><input name="photo" type="file" accept="image/*">`:""}
+  <div class="acts"><button type="button" class="btn ghost" data-close>Cancelar</button><button class="btn">Guardar</button></div>
+  ${id?`<div class="acts"><button type="button" class="btn del" onclick="delVeh('${id}')">Apagar viatura</button></div>`:""}`,
+  async(f,form)=>{const p=await files(form,"photo");const o=id?v:{id:uid(),created:Date.now(),records:[],alerts:[],plan:defPlan()};
+    Object.assign(o,{name:f.get("name"),plate:f.get("plate"),year:f.get("year"),km:Number(f.get("km"))||0});if(p[0])o.photo=p[0];if(!id){S.vehicles.push(o);S.sel=o.id;S.tab="resumo"}});
+}
+function delVeh(id){if(confirm("Apagar esta viatura e todos os registos? Não é possível desfazer.")){removed.add(id);S.vehicles=S.vehicles.filter(v=>v.id!==id);S.sel=null;document.querySelector(".sheet")?.remove();render()}}
+function editKm(){
+  const v=cur(),sleep=ms=>new Promise(r=>setTimeout(r,ms));
+  const d=sheet(`<h2>Atualizar quilómetros</h2>
+  <button type="button" class="btn ghost" id="kmcam" style="width:100%">Abrir câmara e ler o quadrante</button>
+  <div id="kmbox" style="display:none;margin-top:8px"><div style="position:relative;overflow:hidden;border-radius:10px;background:#000"><video id="kmvid" autoplay playsinline muted style="width:100%;display:block"></video><div style="position:absolute;left:10%;right:10%;top:35%;height:30%;border:3px solid #fff;border-radius:8px;box-shadow:0 0 0 999px rgba(0,0,0,.4);pointer-events:none"></div></div>
+  <div class="acts"><button type="button" class="btn" id="kmuse" disabled>Usar este valor</button><button type="button" class="btn ghost" id="kmstop">Fechar câmara</button></div></div>
+  <div id="kmmsg" class="mut" style="margin-top:6px"></div>
+  <label>Quilómetros atuais</label><input name="km" type="number" inputmode="numeric" min="0" required value="${v.km||""}">
+  <div class="acts"><button type="button" class="btn ghost" data-close>Cancelar</button><button class="btn">Guardar</button></div>`,
+  f=>{const n=Number(f.get("km"))||0;if(n<(v.km||0)&&!confirm("O valor é inferior ao atual. Guardar mesmo assim?"))return;v.km=n});
+  const $d=s=>d.querySelector(s),cam=$d("#kmcam"),box=$d("#kmbox"),vid=$d("#kmvid"),m=$d("#kmmsg"),inp=$d("[name=km]"),use=$d("#kmuse");
+  let stream=null,worker=null,run=false;
+  const stop=()=>{run=false;if(stream)stream.getTracks().forEach(t=>t.stop());stream=null;if(worker)worker.terminate().catch(()=>{});worker=null;box.style.display="none";cam.style.display=""};
+  $d("#kmstop").onclick=stop;
+  use.onclick=()=>{inp.value=use.dataset.v;stop();m.textContent="Valor "+fmtKm(Number(inp.value))+" preenchido. Confirma ou corrige e carrega em Guardar."};
+  cam.onclick=async()=>{
+    try{stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:"environment"},width:{ideal:1280}},audio:false})}
+    catch(e){m.textContent="Não consegui abrir a câmara. Autoriza o acesso à câmara ou escreve o valor manualmente.";return}
+    vid.srcObject=stream;box.style.display="block";cam.style.display="none";run=true;use.disabled=true;
+    const iv=setInterval(()=>{if(!document.body.contains(d)){stop();clearInterval(iv)}},500);
+    m.textContent="A preparar a leitura… (precisa de internet)";
+    try{
+      if(!window.Tesseract)await new Promise((ok,ko)=>{const s=document.createElement("script");s.src="https://cdnjs.cloudflare.com/ajax/libs/tesseract.js/5.1.1/tesseract.min.js";s.onload=ok;s.onerror=ko;document.head.appendChild(s)});
+      worker=await Tesseract.createWorker("eng");
+      await worker.setParameters({tessedit_char_whitelist:"0123456789",tessedit_pageseg_mode:"11"});
+    }catch(e){m.textContent="Leitura automática indisponível (sem internet?). Vê o número na câmara e escreve-o abaixo.";return}
+    const c=document.createElement("canvas"),cx=c.getContext("2d"),curKm=Number(v.km)||0;
+    try{
+      while(run){
+        const w=vid.videoWidth,h=vid.videoHeight;if(!w){await sleep(300);continue}
+        c.width=w*.8;c.height=h*.3;cx.drawImage(vid,w*.1,h*.35,w*.8,h*.3,0,0,c.width,c.height);
+        const r=await worker.recognize(c);if(!run)break;
+        const nums=[...new Set((r.data.text.match(/\d{4,7}/g)||[]).map(Number))];
+        const up=nums.filter(n=>n>=curKm).sort((a,b)=>a-b),pick=up.length?up[0]:nums.sort((a,b)=>b-a)[0];
+        if(pick){use.dataset.v=pick;use.disabled=false;m.textContent="A ler: "+fmtKm(pick)+". Se estiver certo, toca em «Usar este valor»."}
+        else m.textContent="A procurar números… põe o odómetro dentro da moldura e mantém o telemóvel firme.";
+        await sleep(300);
+      }
+    }catch(e){if(run)m.textContent="A leitura falhou. Escreve o valor manualmente."}
+  };
+}
+function editRec(id,pre){
+  const v=cur(),x=(v.records||[]).find(r=>r.id===id)||pre||{};
+  sheet(`<h2>${id?"Editar registo":"Novo registo"}</h2>
+  <label>Tipo</label><select name="type">${TYPES.map(t=>`<option ${t===x.type?"selected":""}>${t}</option>`).join("")}</select>
+  <div class="g2"><div><label>Data</label><input name="date" type="date" required value="${x.date||today()}"></div><div><label>Quilómetros</label><input name="km" type="number" inputmode="numeric" value="${x.km??v.km??""}"></div></div>
+  <label>Custo (€)</label><input name="cost" type="number" step="0.01" inputmode="decimal" value="${x.cost??""}">
+  <label>Notas (oficina, peças, referências…)</label><textarea name="notes" rows="3">${esc(x.notes)}</textarea>
+  ${ASSETS?`<label>Fotografias (recibos, peças, danos)</label><input name="ph" type="file" accept="image/*" multiple>`:""}
+  ${(x.photos||[]).length?`<div class="mut" style="margin-top:6px">${x.photos.length} fotografia(s) já guardada(s); novas serão adicionadas.</div>`:""}
+  <div class="acts"><button type="button" class="btn ghost" data-close>Cancelar</button><button class="btn">Guardar</button></div>
+  ${id?`<div class="acts"><button type="button" class="btn del" onclick="delRec('${id}')">Apagar registo</button></div>`:""}`,
+  async(f,form)=>{const ph=await files(form,"ph");const o=id?x:{id:uid(),photos:[]};
+    Object.assign(o,{type:f.get("type"),date:f.get("date"),km:Number(f.get("km"))||0,cost:Number(f.get("cost"))||0,notes:f.get("notes")});o.photos=[...(o.photos||[]),...ph];
+    if(!id){v.records.push(o);if(pre?.fromAlert)v.alerts=v.alerts.filter(a=>a.id!==pre.fromAlert)}
+    if(o.km>(v.km||0))v.km=o.km;S.tab="registos"});
+}
+function delRec(id){if(confirm("Apagar este registo?")){const v=cur();v.records=v.records.filter(r=>r.id!==id);document.querySelector(".sheet")?.remove();render()}}
+function editAlert(id){
+  const v=cur(),a=(v.alerts||[]).find(x=>x.id===id)||{};
+  sheet(`<h2>${id?"Editar aviso":"Novo aviso"}</h2>
+  <label>O que tens de fazer?</label><input name="title" required placeholder="Ex.: Inspeção, mudança de óleo" value="${esc(a.title)}">
+  <div class="g2"><div><label>Até à data</label><input name="date" type="date" value="${a.date||""}"></div><div><label>Aos km</label><input name="km" type="number" inputmode="numeric" placeholder="${(Number(v.km)||0)+10000}" value="${a.km??""}"></div></div>
+  <p class="mut">Preenche a data, os km ou ambos. O aviso dispara com o que chegar primeiro.</p>
+  <div class="acts"><button type="button" class="btn ghost" data-close>Cancelar</button><button class="btn">Guardar</button></div>
+  ${id?`<div class="acts"><button type="button" class="btn del" onclick="delAlert('${id}')">Apagar aviso</button></div>`:""}`,
+  f=>{if(!f.get("date")&&!f.get("km")){alert("Indica uma data ou uma quilometragem.");return}
+    const o=id?a:{id:uid()};Object.assign(o,{title:f.get("title"),date:f.get("date"),km:Number(f.get("km"))||0});if(!id)v.alerts.push(o);S.tab="avisos"});
+}
+function delAlert(id){const v=cur();v.alerts=v.alerts.filter(a=>a.id!==id);document.querySelector(".sheet")?.remove();render()}
+function doneAlert(id){const v=cur();if(id.startsWith('plan:')){const p=v.plan.find(x=>x.id===id.slice(5));editRec(null,{type:p.type});return}const a=v.alerts.find(x=>x.id===id);editRec(null,{type:TYPES.includes(a.title)?a.title:"Outro",notes:TYPES.includes(a.title)?"":a.title,fromAlert:id})}
+const defPlan=()=>[["Revisão",15000,12],["Óleo e filtros",15000,12],["Rotação de pneus",10000,0],["Travões",30000,24],["Inspeção (IPO)",0,24],["Seguro",0,12]].map(([type,km,months])=>({id:uid(),type,km,months}));
+function planAlerts(v){
+  if(!v.plan)v.plan=defPlan();
+  return v.plan.map(p=>{
+    const rs=(v.records||[]).filter(r=>r.type===p.type).sort((a,b)=>b.date.localeCompare(a.date)||(b.km||0)-(a.km||0));
+    let ld=p.lastDate||"",lk=Number(p.lastKm)||0;const r=rs[0];
+    if(r&&(!ld||r.date>=ld)){ld=r.date;lk=Number(r.km)||0}
+    let date="";if(Number(p.months)&&ld){const d=new Date(ld+"T12:00");d.setMonth(d.getMonth()+Number(p.months));date=d.toISOString().slice(0,10)}
+    const km=Number(p.km)&&lk?lk+Number(p.km):0;
+    return{id:"plan:"+p.id,title:p.type,derived:true,planId:p.id,date,km,none:!date&&!km};
+  });
+}
+const allAlerts=v=>[...(v.alerts||[]),...planAlerts(v).filter(a=>!a.none)];
+function planSheet(){
+  const v=cur();document.querySelectorAll(".sheet").forEach(s=>s.remove());
+  const pa=Object.fromEntries(planAlerts(v).map(a=>[a.planId,a]));
+  sheet(`<h2>Plano de manutenção</h2><p class="mut">Define de quanto em quanto tempo ou km se faz cada intervenção. Os avisos calculam-se sozinhos a partir do último registo desse tipo. Os valores são sugestões: ajusta-os ao manual da tua viatura.</p>
+  ${v.plan.map(p=>`<div class="card"><div class="row"><div><strong>${esc(p.type)}</strong><div class="mut">${[p.km?"cada "+fmtKm(p.km):"",p.months?"cada "+p.months+" meses":""].filter(Boolean).join(" · ")||"Sem intervalo"}</div>${pa[p.id]&&pa[p.id].none?`<div class="mut">Sem histórico: regista a última vez ou indica-a ao editar.</div>`:""}</div><button type="button" class="btn ghost sm" onclick="editPlan('${p.id}')">Editar</button></div></div>`).join("")}
+  <div class="acts"><button type="button" class="btn ghost" data-close>Fechar</button><button type="button" class="btn" onclick="editPlan()">+ Intervenção</button></div>`,()=>{});
+}
+function editPlan(id){
+  const v=cur();document.querySelectorAll(".sheet").forEach(s=>s.remove());
+  const p=(v.plan||[]).find(x=>x.id===id)||{};
+  sheet(`<h2>${id?"Editar intervenção":"Nova intervenção"}</h2>
+  <label>Tipo</label><select name="type">${TYPES.map(t=>`<option ${t===p.type?"selected":""}>${t}</option>`).join("")}</select>
+  <div class="g2"><div><label>A cada (km)</label><input name="km" type="number" inputmode="numeric" min="0" value="${p.km||""}"></div><div><label>A cada (meses)</label><input name="months" type="number" inputmode="numeric" min="0" value="${p.months||""}"></div></div>
+  <p class="mut">Preenche km, meses ou ambos. O aviso dispara com o que chegar primeiro.</p>
+  <label>Última vez (só se ainda não tens registo)</label><div class="g2"><input name="lastDate" type="date" value="${p.lastDate||""}"><input name="lastKm" type="number" inputmode="numeric" placeholder="km" value="${p.lastKm||""}"></div>
+  <div class="acts"><button type="button" class="btn ghost" onclick="planSheet()">Cancelar</button><button class="btn">Guardar</button></div>
+  ${id?`<div class="acts"><button type="button" class="btn del" onclick="delPlan('${id}')">Apagar intervenção</button></div>`:""}`,
+  f=>{const o=id?p:{id:uid()};Object.assign(o,{type:f.get("type"),km:Number(f.get("km"))||0,months:Number(f.get("months"))||0,lastDate:f.get("lastDate"),lastKm:Number(f.get("lastKm"))||0});if(!id){v.plan=v.plan||defPlan();v.plan.push(o)}setTimeout(planSheet,50)});
+}
+function delPlan(id){const v=cur();v.plan=v.plan.filter(p=>p.id!==id);render();planSheet()}
+function zoom(s){const l=$("#lb");l.querySelector("img").src=s;l.style.display="grid"}
+function backup(){
+  const DC=driveCfg(),last=meta.lastBackup?new Date(meta.lastBackup).toLocaleDateString("pt-PT"):"nunca";
+  const d=sheet(`<h2>Cópia de segurança</h2>${window.Android?"":`<p class="mut">Os dados e as fotografias ficam guardados neste telemóvel, dentro do browser. Uma página web não consegue atualizar um ficheiro que já existe no Android, por isso cada cópia é um ficheiro novo. Guarda uma cópia de vez em quando (por exemplo depois de uma revisão), copia-a para o Drive ou para o computador e apaga as antigas.</p>`}
+  <label style="display:flex;gap:10px;align-items:center"><input type="checkbox" id="au" ${meta.auto?"checked":""} style="width:22px;min-height:0"> Criar também um ficheiro a cada Guardar (não recomendado: cria muitos ficheiros)</label><p>Última cópia: <strong>${last}</strong></p>
+  ${window.Android?`<h3 style="margin:14px 0 4px">Ficheiro de dados</h3><p class="mut">A app grava sempre no mesmo ficheiro, sem criar cópias novas, sempre que guardas ou alteras algo.</p><p><strong>Ficheiro:</strong> ${esc(Android.fileName()||"nenhum escolhido")}</p>
+  <div class="acts"><button type="button" class="btn" id="afn">Criar ficheiro novo</button><button type="button" class="btn ghost" id="afo">Escolher existente</button></div>
+  <div class="acts"><button type="button" class="btn ghost" id="afs">Guardar agora</button><button type="button" class="btn ghost" id="afl">Carregar do ficheiro</button></div><div id="amsg" class="mut" style="margin-bottom:8px"></div>`:""}
+  ${window.showSaveFilePicker?`<div class="acts"><button type="button" class="btn ghost" id="lf">${fh?"Trocar ficheiro de cópia":"Escolher ficheiro único de cópia"}</button></div>${fh?`<p class="mut">Ficheiro ligado: ${esc(fh.name)}. Cada Guardar atualiza este ficheiro.</p>`:""}`:""}
+  <div class="acts"><button type="button" class="btn" id="ex">Guardar / partilhar cópia</button></div>
+  <label>Importar cópia (substitui os dados deste telemóvel)</label><input type="file" id="im" accept=".json,application/json">
+  <div class="acts"><button type="button" class="btn ghost" data-close>Fechar</button></div>`,()=>{});
+  if(window.Android){
+    const say=x=>{d.querySelector("#amsg").textContent=x};
+    d.querySelector("#afn").onclick=()=>Android.createFile();
+    d.querySelector("#afo").onclick=()=>Android.pickFile();
+    d.querySelector("#afs").onclick=()=>{if(!Android.hasFile()){say("Escolhe primeiro o ficheiro.");return}fileSync(true);d.remove()};
+    d.querySelector("#afl").onclick=()=>loadFromFile(say,d);
+    const e1=d.querySelector("#ex");if(e1)e1.closest(".acts").remove();
+    const e2=d.querySelector("#au");if(e2)e2.closest("label").remove();
+  }
+  d.querySelector("#lf")?.addEventListener("click",async()=>{try{fh=await showSaveFilePicker({suggestedName:"garagem-dados.json",types:[{description:"Garagem",accept:{"application/json":[".json"]}}]});await tx("kv","readwrite",s=>s.put(fh,"fh"));d.remove();render();autoBackup()}catch(e){}});
+  if(d.querySelector("#au"))d.querySelector("#au").onchange=async e=>{meta.auto=e.target.checked;try{await tx("kv","readwrite",s=>s.put(meta,"meta"))}catch(x){}};
+  if(d.querySelector("#ex"))d.querySelector("#ex").onclick=async()=>{
+    const name="garagem-"+today()+".json",blob=new Blob([JSON.stringify({app:"garagem",version:1,vehicles:S.vehicles,photos:PH})],{type:"application/json"}),f=new File([blob],name,{type:"application/json"});
+    try{
+      if(navigator.canShare&&navigator.canShare({files:[f]}))await navigator.share({files:[f],title:"Garagem"});else throw 0;
+    }catch(e){
+      if(e&&e.name==="AbortError")return;
+      const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=name;a.click();
+    }
+    meta.lastBackup=Date.now();try{await tx("kv","readwrite",s=>s.put(meta,"meta"))}catch(e){}
+    d.remove();render();
+  };
+  d.querySelector("#im").onchange=async e=>{
+    try{
+      const j=JSON.parse(await e.target.files[0].text());if(j.app!=="garagem"||!Array.isArray(j.vehicles))throw 0;
+      if(!confirm("Substituir todos os dados deste telemóvel pelos do ficheiro?"))return;
+      Object.keys(PH).forEach(k=>delete PH[k]);Object.assign(PH,j.photos||{});S.vehicles=j.vehicles;S.sel=null;
+      await tx("photos","readwrite",s=>{s.clear();Object.entries(PH).forEach(([k,v])=>s.put(v,k))});
+      await tx("kv","readwrite",s=>s.put(S.vehicles,"vehicles"));lastJ=cj(S.vehicles);
+      d.remove();render();
+    }catch(x){alert("Ficheiro inválido.")}
+  };
+}
+render();init();
+</script>
+</body>
+</html>

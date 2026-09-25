@@ -1,0 +1,29 @@
+GARAGEM - APP ANDROID (ficheiro de dados único)
+
+O que faz
+- Grava sempre no MESMO ficheiro (que tu escolhes), sem criar (1), (2)...
+- Câmara em direto para ler os km (precisa de internet).
+- Plano de manutenção, avisos, fotografias, várias viaturas.
+
+Como obter o APK (conta GitHub gratuita, feito num computador)
+1. Em github.com cria uma conta e um repositório novo (pode ser privado), por exemplo "garagem".
+2. Descompacta este zip. No repositório, escolhe "Add file > Upload files" e arrasta TODO o conteúdo da pasta (inclui a pasta .github; se não a conseguires ver, ativa a vista de ficheiros ocultos).
+   Se a pasta .github não subir: "Add file > Create new file", escreve o nome  .github/workflows/build.yml  e cola o conteúdo do ficheiro build.yml que está no zip.
+3. Separador "Actions": abre "Build APK" e, se não arrancar sozinho, "Run workflow". Demora uns 5 a 10 minutos.
+4. Quando ficar verde, abre a execução e descarrega o artefacto "garagem-apk" (vem em zip). Dentro está app-debug.apk.
+5. Copia o APK para o telemóvel, abre-o e permite instalar de "origens desconhecidas".
+   Se o passo 3 falhar (vermelho), copia-me a mensagem de erro e eu corrijo.
+
+Primeira utilização
+1. Abre a Garagem > botão Cópia (ou "Escolher ficheiro" no aviso amarelo).
+2. "Criar ficheiro novo" (garagem-dados.json) numa pasta à tua escolha (Documentos, por exemplo).
+3. A partir daí, cada alteração atualiza esse ficheiro.
+4. Telemóvel novo: instala o APK, copia o ficheiro, abre Cópia > "Escolher existente" e aceita "carregar os dados do ficheiro".
+
+Passar os dados da versão HTML
+- Na versão HTML: Cópia > Guardar / partilhar cópia (gera um .json).
+- Na app: escolhe esse .json em "Escolher existente" e aceita carregar os dados.
+
+Notas
+- A app guarda também uma cópia interna. Se a desinstalares, essa cópia perde-se; o ficheiro escolhido mantém-se.
+- Não escolhas uma pasta sincronizada por apps que possam duplicar ficheiros se não quiseres surpresas.
