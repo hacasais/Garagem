@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Garagem</title><meta name="theme-color" content="#0F4C4A">
+<title>RLTecAuto</title><meta name="theme-color" content="#0F4C4A">
 <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Barlow:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
 :root{--bg:#EEF1F0;--card:#fff;--ink:#16211F;--mut:#5E6D69;--line:#D5DCDA;--pri:#0F4C4A;--onpri:#fff;--warn:#B77700;--warnbg:#FBEFD2;--bad:#B3261E;--badbg:#FADBD8;--ok:#1E7A4C;--okbg:#D9F0E3;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
@@ -176,7 +176,7 @@ const near=(a,v)=>{const i=alertInfo(a,v);return((i.days!==null&&i.days<=60)||(i
 const openV=id=>{S.sel=id;S.tab="resumo";render()};
 function listView(){
   const n=S.vehicles.reduce((s,v)=>s+allAlerts(v).filter(a=>near(a,v)).length,0);
-  return `<div class="top"><h1>Garagem</h1><button class="btn ghost sm" onclick="backup()">Cópia</button></div>
+  return `<div class="top"><h1>RLTecAuto</h1><button class="btn ghost sm" onclick="backup()">Cópia</button></div>
   ${bkNote()}
   ${n?`<p class="mut" style="margin:0 0 12px">${n} aviso${n>1?"s":""} nos próximos 2 meses (ou a menos de 2 000 km)</p>`:""}
   ${S.vehicles.length?S.vehicles.map(vcard).join(""):`<div class="empty">Ainda não tens nenhuma viatura.<br>Adiciona a primeira para começar a registar.</div>`}
@@ -191,10 +191,10 @@ function vcard(v){
 }
 const plate=p=>`<span class="plate" style="margin-top:6px"><i>P</i><b>${esc(p.toUpperCase())}</b></span>`;
 function vehicleView(v){
-  const tabs=[["resumo","Resumo"],["registos","Registos"],["avisos","Avisos"]];
+  const tabs=[["resumo","Resumo"],["registos","Registos"],["avisos","Avisos"],["tecnico","Técnico"]];
   let body="";
-  if(S.tab==="resumo")body=resumo(v);else if(S.tab==="registos")body=registos(v);else body=avisos(v);
-  const fab=S.tab==="avisos"?`<button class="btn fab" onclick="editAlert()">+ Aviso</button>`:`<button class="btn fab" onclick="editRec()">+ Registo</button>`;
+  if(S.tab==="resumo")body=resumo(v);else if(S.tab==="registos")body=registos(v);else if(S.tab==="avisos")body=avisos(v);else body=tecnico(v);
+  const fab=S.tab==="avisos"?`<button class="btn fab" onclick="editAlert()">+ Aviso</button>`:S.tab==="tecnico"?`<button class="btn fab" onclick="editTech()">+ Detalhe</button>`:`<button class="btn fab" onclick="editRec()">+ Registo</button>`;
   return `<div class="top"><button class="btn ghost sm" onclick="S.sel=null;render()">‹ Viaturas</button><button class="btn ghost sm" onclick="editVeh('${v.id}')">Editar</button></div>
   <div class="hero">${thumb(v)}<div><h1 style="font-size:26px">${esc(v.name)}</h1><div class="num">${(Number(v.km)||0).toLocaleString("pt-PT")} <span style="font-size:20px">km</span></div>${v.plate?plate(v.plate):""}</div></div>
   <div class="tabs" role="tablist">${tabs.map(t=>`<button role="tab" aria-selected="${S.tab===t[0]}" onclick="S.tab='${t[0]}';render()">${t[1]}</button>`).join("")}</div>${body}${fab}`;
@@ -210,12 +210,19 @@ function resumo(v){
   <div class="acts"><button class="btn ghost" onclick="editKm()">Atualizar km</button></div>`;
 }
 function registos(v){
-  const r=[...(v.records||[])].sort((a,b)=>b.date.localeCompare(a.date)||b.km-a.km);
-  if(!r.length)return `<div class="empty">Sem registos. Guarda aqui revisões, reparações, alterações e fotografias.</div>`;
-  return r.map(x=>`<div class="card"><div class="row"><div><strong>${esc(x.type)}</strong><div class="mut">${fmtD(x.date)}${x.km?" · "+fmtKm(x.km):""}</div></div><div class="num" style="font-size:22px">${x.cost?fmtEur(x.cost):""}</div></div>
+  const all=[...(v.records||[])];
+  if(!all.length)return `<div class="empty">Sem registos. Guarda aqui revisões, reparações, alterações e fotografias.</div>`;
+  const types=[...new Set(all.map(x=>x.type))].sort((a,b)=>a.localeCompare(b,"pt"));
+  const filt=S.recFilter&&types.includes(S.recFilter)?S.recFilter:"";
+  const sel=`<select onchange="S.recFilter=this.value;render()" style="margin-bottom:12px">
+    <option value=""${filt?"":" selected"}>Todos os componentes</option>
+    ${types.map(t=>`<option value="${esc(t)}"${t===filt?" selected":""}>${esc(t)}</option>`).join("")}
+  </select>`;
+  const r=(filt?all.filter(x=>x.type===filt):all).sort((a,b)=>b.date.localeCompare(a.date)||b.km-a.km);
+  return sel+(r.length?r.map(x=>`<div class="card"><div class="row"><div><strong>${esc(x.type)}</strong><div class="mut">${fmtD(x.date)}${x.km?" · "+fmtKm(x.km):""}</div></div><div class="num" style="font-size:22px">${x.cost?fmtEur(x.cost):""}</div></div>
   ${x.notes?`<p style="margin:8px 0 0">${esc(x.notes)}</p>`:""}
   ${(x.photos||[]).length?`<div class="photos">${x.photos.map((p,i)=>`<img src="${src(p)}" alt="Fotografia ${i+1}" onclick="zoom(this.src)">`).join("")}</div>`:""}
-  <div class="acts" style="margin-top:10px"><button class="btn ghost sm" onclick="editRec('${x.id}')">Editar</button></div></div>`).join("");
+  <div class="acts" style="margin-top:10px"><button class="btn ghost sm" onclick="editRec('${x.id}')">Editar</button></div></div>`).join(""):`<div class="empty">Sem registos deste componente.</div>`);
 }
 function alertCard(a,i){
   const c=["ok","warn","bad"][i.lvl];
@@ -225,6 +232,22 @@ function alertCard(a,i){
 function avisos(v){
   const l=allAlerts(v).map(a=>({a,i:alertInfo(a,v)})).sort((x,y)=>y.i.score-x.i.score);
   return `<div class="acts" style="margin:0 0 12px"><button class="btn ghost" onclick="planSheet()">Plano de manutenção</button></div>`+(l.length?l.map(x=>alertCard(x.a,x.i)).join(""):`<div class="empty">Sem avisos. No plano de manutenção defines de quanto em quanto tempo ou km fazes cada intervenção; os avisos surgem depois de registares a última vez.</div>`);
+}
+const TECH_CATS=[["capacidade","Capacidades"],["peca","Peças e referências"],["outro","Outros detalhes"]];
+const TECH_SUG={
+  capacidade:["Óleo motor — capacidade (L)","Óleo caixa — capacidade (L)","Líquido refrigerante — capacidade (L)","Líquido de travões — capacidade (L)","Depósito de combustível (L)","Pressão pneus dianteiros (bar)","Pressão pneus traseiros (bar)","AdBlue — capacidade (L)"],
+  peca:["Filtro de óleo — referência","Filtro de ar — referência","Filtro de combustível — referência","Filtro de habitáculo — referência","Velas — referência","Bateria — referência","Pastilhas de travão — dianteiras","Pastilhas de travão — traseiras","Discos de travão — referência","Correia de distribuição — referência","Pneus — medida"],
+  outro:["Chassis (VIN)","Código da tinta","Código do motor","Caixa de velocidades","Óleo motor — especificação","Óleo caixa — especificação","Correia de distribuição — intervalo"]
+};
+function tecnico(v){
+  const t=v.tech||[];
+  if(!t.length)return `<div class="empty">Sem detalhes técnicos. Guarda aqui capacidades, referências de peças, chassis e outras especificações — os campos são livres, define-os como quiseres.</div>`;
+  return TECH_CATS.map(([cat,label])=>{
+    const items=t.filter(x=>(x.cat||"outro")===cat);
+    if(!items.length)return "";
+    return `<h3 style="margin:16px 0 8px">${label}</h3>`+items.map(x=>`<div class="card"><div class="row"><div style="flex:1"><strong>${esc(x.label)}</strong><div style="margin-top:2px">${esc(x.value)||`<span class="mut">—</span>`}</div>${x.note?`<div class="mut" style="margin-top:4px">${esc(x.note)}</div>`:""}</div></div>
+    <div class="acts" style="margin-top:10px"><button class="btn ghost sm" onclick="editTech('${x.id}')">Editar</button></div></div>`).join("");
+  }).join("");
 }
 function sheet(html,onsubmit){
   const d=document.createElement("div");d.className="sheet";d.innerHTML=`<form>${html}</form>`;
@@ -246,7 +269,7 @@ function editVeh(id){
   ${ASSETS?`<label>Fotografia</label><input name="photo" type="file" accept="image/*">`:""}
   <div class="acts"><button type="button" class="btn ghost" data-close>Cancelar</button><button class="btn">Guardar</button></div>
   ${id?`<div class="acts"><button type="button" class="btn del" onclick="delVeh('${id}')">Apagar viatura</button></div>`:""}`,
-  async(f,form)=>{const p=await files(form,"photo");const o=id?v:{id:uid(),created:Date.now(),records:[],alerts:[],plan:defPlan()};
+  async(f,form)=>{const p=await files(form,"photo");const o=id?v:{id:uid(),created:Date.now(),records:[],alerts:[],plan:defPlan(),tech:[]};
     Object.assign(o,{name:f.get("name"),plate:f.get("plate"),year:f.get("year"),km:Number(f.get("km"))||0});if(p[0])o.photo=p[0];if(!id){S.vehicles.push(o);S.sel=o.id;S.tab="resumo"}});
 }
 function delVeh(id){if(confirm("Apagar esta viatura e todos os registos? Não é possível desfazer.")){removed.add(id);S.vehicles=S.vehicles.filter(v=>v.id!==id);S.sel=null;document.querySelector(".sheet")?.remove();render()}}
@@ -320,6 +343,25 @@ function editAlert(id){
     const o=id?a:{id:uid()};Object.assign(o,{title:f.get("title"),date:f.get("date"),km:Number(f.get("km"))||0});if(!id)v.alerts.push(o);S.tab="avisos"});
 }
 function delAlert(id){const v=cur();v.alerts=v.alerts.filter(a=>a.id!==id);document.querySelector(".sheet")?.remove();render()}
+function editTech(id){
+  const v=cur();v.tech=v.tech||[];
+  const x=v.tech.find(t=>t.id===id)||{};
+  const cat0=x.cat||"capacidade";
+  const catRow=(val,label)=>`<label style="display:flex;gap:8px;align-items:center;font-weight:500"><input type="radio" name="cat" value="${val}" ${cat0===val?"checked":""} style="width:20px;min-height:0" onchange="document.getElementById('techlist').innerHTML=({capacidade:${JSON.stringify(TECH_SUG.capacidade)},peca:${JSON.stringify(TECH_SUG.peca)},outro:${JSON.stringify(TECH_SUG.outro)}})[this.value].map(t=>'<option value=\\''+t+'\\'>').join('')"> ${label}</label>`;
+  sheet(`<h2>${id?"Editar detalhe":"Novo detalhe técnico"}</h2>
+  <label>Categoria</label>
+  <div style="display:flex;gap:16px;flex-wrap:wrap;margin-top:4px">${TECH_CATS.map(([v2,l])=>catRow(v2,l)).join("")}</div>
+  <label style="margin-top:14px">Campo</label><input name="label" required list="techlist" placeholder="Ex.: Óleo motor — capacidade (L)" value="${esc(x.label||"")}">
+  <datalist id="techlist">${(TECH_SUG[cat0]||[]).map(t=>`<option value="${t}">`).join("")}</datalist>
+  <label>Valor</label><input name="value" placeholder="Ex.: 4,3 L / 5W-30" value="${esc(x.value||"")}">
+  <label>Nota (opcional — ex.: norma substituída, observações)</label><textarea name="note" rows="2">${esc(x.note||"")}</textarea>
+  <div class="acts"><button type="button" class="btn ghost" data-close>Cancelar</button><button class="btn">Guardar</button></div>
+  ${id?`<div class="acts"><button type="button" class="btn del" onclick="delTech('${id}')">Apagar</button></div>`:""}`,
+  f=>{const label=(f.get("label")||"").trim();if(!label)return;
+    const o=id?x:{id:uid()};Object.assign(o,{cat:f.get("cat")||"outro",label,value:(f.get("value")||"").trim(),note:(f.get("note")||"").trim()});
+    if(!id)v.tech.push(o);});
+}
+function delTech(id){const v=cur();v.tech=(v.tech||[]).filter(t=>t.id!==id);document.querySelector(".sheet")?.remove();render()}
 function doneAlert(id){const v=cur();if(id.startsWith('plan:')){const p=v.plan.find(x=>x.id===id.slice(5));editRec(null,{type:p.type});return}const a=v.alerts.find(x=>x.id===id);editRec(null,{type:TYPES.includes(a.title)?a.title:"Outro",notes:TYPES.includes(a.title)?"":a.title,fromAlert:id})}
 const defPlan=()=>[["Revisão",15000,12],["Óleo e filtros",15000,12],["Rotação de pneus",10000,0],["Travões",30000,24],["Inspeção (IPO)",0,24],["Seguro",0,12]].map(([type,km,months])=>({id:uid(),type,km,months}));
 function planAlerts(v){
