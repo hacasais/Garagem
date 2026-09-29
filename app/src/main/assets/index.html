@@ -317,7 +317,9 @@ function editKm(){
 function editRec(id,pre){
   const v=cur(),x=(v.records||[]).find(r=>r.id===id)||pre||{};
   sheet(`<h2>${id?"Editar registo":"Novo registo"}</h2>
-  <label>Tipo</label><select name="type">${allTypes().map(t=>`<option ${t===x.type?"selected":""}>${esc(t)}</option>`).join("")}</select>
+  <div class="row" style="align-items:baseline"><label style="margin:0">Tipo</label><button type="button" class="btn ghost sm" style="padding:2px 10px;min-height:0" onclick="manageTypes()">Gerir lista</button></div>
+  <input name="type" required list="rectypelist" placeholder="Escolhe ou escreve um tipo novo" value="${esc(x.type||"")}">
+  <datalist id="rectypelist">${allTypes().map(t=>`<option value="${esc(t)}">`).join("")}</datalist>
   <div class="g2"><div><label>Data</label><input name="date" type="date" required value="${x.date||today()}"></div><div><label>Quilómetros</label><input name="km" type="number" inputmode="numeric" value="${x.km??v.km??""}"></div></div>
   <label>Custo (€)</label><input name="cost" type="number" step="0.01" inputmode="decimal" value="${x.cost??""}">
   <label>Notas (oficina, peças, referências…)</label><textarea name="notes" rows="3">${esc(x.notes)}</textarea>
@@ -326,7 +328,7 @@ function editRec(id,pre){
   <div class="acts"><button type="button" class="btn ghost" data-close>Cancelar</button><button class="btn">Guardar</button></div>
   ${id?`<div class="acts"><button type="button" class="btn del" onclick="delRec('${id}')">Apagar registo</button></div>`:""}`,
   async(f,form)=>{const ph=await files(form,"ph");const o=id?x:{id:uid(),photos:[]};
-    Object.assign(o,{type:f.get("type"),date:f.get("date"),km:Number(f.get("km"))||0,cost:Number(f.get("cost"))||0,notes:f.get("notes")});o.photos=[...(o.photos||[]),...ph];
+    Object.assign(o,{type:(f.get("type")||"").trim(),date:f.get("date"),km:Number(f.get("km"))||0,cost:Number(f.get("cost"))||0,notes:f.get("notes")});o.photos=[...(o.photos||[]),...ph];
     if(!id){v.records.push(o);if(pre?.fromAlert)v.alerts=v.alerts.filter(a=>a.id!==pre.fromAlert)}
     if(o.km>(v.km||0))v.km=o.km;S.tab="registos"});
 }
@@ -343,16 +345,51 @@ function editAlert(id){
     const o=id?a:{id:uid()};Object.assign(o,{title:f.get("title"),date:f.get("date"),km:Number(f.get("km"))||0});if(!id)v.alerts.push(o);S.tab="avisos"});
 }
 function delAlert(id){const v=cur();v.alerts=v.alerts.filter(a=>a.id!==id);document.querySelector(".sheet")?.remove();render()}
+function techFieldList(cat){
+  const base=TECH_SUG[cat]||[];
+  const removed=(meta.techRemoved&&meta.techRemoved[cat])||[];
+  const custom=(meta.techCustom&&meta.techCustom[cat])||[];
+  const out=base.filter(t=>!removed.includes(t));
+  custom.forEach(t=>{if(t&&!out.includes(t))out.push(t)});
+  return out;
+}
+function techCatChange(val){const el=document.getElementById("techlist");if(el)el.innerHTML=techFieldList(val).map(t=>`<option value="${esc(t)}">`).join("")}
+function manageTechFields(cat){
+  document.querySelectorAll(".sheet").forEach(s=>s.remove());
+  const label=(TECH_CATS.find(c=>c[0]===cat)||["","Detalhes"])[1];
+  const list=techFieldList(cat);
+  const d=sheet(`<h2>Gerir lista — ${esc(label)}</h2><p class="mut">Estes campos são sugeridos ao criar um detalhe técnico nesta categoria, em todas as viaturas. Apagar um campo aqui não apaga os detalhes já guardados.</p>
+  ${list.length?list.map((t,i)=>`<div class="card"><div class="row"><strong>${esc(t)}</strong><button type="button" class="btn del sm" onclick="removeTechField('${cat}',${i})">Apagar</button></div></div>`).join(""):`<div class="empty">Sem campos definidos.</div>`}
+  <label style="margin-top:14px">Adicionar campo novo</label><div class="g2"><input id="newfield" placeholder="Ex.: Pressão do pneu sobresselente"><button type="button" class="btn" id="addfield">Adicionar</button></div>
+  <div class="acts"><button type="button" class="btn ghost" data-close>Fechar</button></div>`,()=>{});
+  d.querySelector("#addfield").onclick=async()=>{
+    const val=(d.querySelector("#newfield").value||"").trim();if(!val)return;
+    meta.techRemoved=meta.techRemoved||{};meta.techCustom=meta.techCustom||{};
+    meta.techRemoved[cat]=(meta.techRemoved[cat]||[]).filter(x=>x!==val);
+    meta.techCustom[cat]=[...new Set([...(meta.techCustom[cat]||[]),val])];
+    try{await tx("kv","readwrite",s=>s.put(meta,"meta"))}catch(e){}
+    manageTechFields(cat);
+  };
+}
+async function removeTechField(cat,i){
+  const list=techFieldList(cat),t=list[i];if(t===undefined)return;
+  meta.techRemoved=meta.techRemoved||{};meta.techCustom=meta.techCustom||{};
+  meta.techRemoved[cat]=[...new Set([...(meta.techRemoved[cat]||[]),t])];
+  meta.techCustom[cat]=(meta.techCustom[cat]||[]).filter(x=>x!==t);
+  try{await tx("kv","readwrite",s=>s.put(meta,"meta"))}catch(e){}
+  manageTechFields(cat);
+}
 function editTech(id){
   const v=cur();v.tech=v.tech||[];
   const x=v.tech.find(t=>t.id===id)||{};
   const cat0=x.cat||"capacidade";
-  const catRow=(val,label)=>`<label style="display:flex;gap:8px;align-items:center;font-weight:500"><input type="radio" name="cat" value="${val}" ${cat0===val?"checked":""} style="width:20px;min-height:0" onchange="document.getElementById('techlist').innerHTML=({capacidade:${JSON.stringify(TECH_SUG.capacidade)},peca:${JSON.stringify(TECH_SUG.peca)},outro:${JSON.stringify(TECH_SUG.outro)}})[this.value].map(t=>'<option value=\\''+t+'\\'>').join('')"> ${label}</label>`;
+  const catRow=(val,label)=>`<label style="display:flex;gap:8px;align-items:center;font-weight:500"><input type="radio" name="cat" value="${val}" ${cat0===val?"checked":""} style="width:20px;min-height:0" onchange="techCatChange(this.value)"> ${label}</label>`;
   sheet(`<h2>${id?"Editar detalhe":"Novo detalhe técnico"}</h2>
   <label>Categoria</label>
   <div style="display:flex;gap:16px;flex-wrap:wrap;margin-top:4px">${TECH_CATS.map(([v2,l])=>catRow(v2,l)).join("")}</div>
-  <label style="margin-top:14px">Campo</label><input name="label" required list="techlist" placeholder="Ex.: Óleo motor — capacidade (L)" value="${esc(x.label||"")}">
-  <datalist id="techlist">${(TECH_SUG[cat0]||[]).map(t=>`<option value="${t}">`).join("")}</datalist>
+  <div class="row" style="align-items:baseline;margin-top:14px"><label style="margin:0">Campo</label><button type="button" class="btn ghost sm" style="padding:2px 10px;min-height:0" onclick="manageTechFields(document.querySelector('input[name=cat]:checked').value)">Gerir lista</button></div>
+  <input name="label" required list="techlist" placeholder="Ex.: Óleo motor — capacidade (L)" value="${esc(x.label||"")}">
+  <datalist id="techlist">${techFieldList(cat0).map(t=>`<option value="${esc(t)}">`).join("")}</datalist>
   <label>Valor</label><input name="value" placeholder="Ex.: 4,3 L / 5W-30" value="${esc(x.value||"")}">
   <label>Nota (opcional — ex.: norma substituída, observações)</label><textarea name="note" rows="2">${esc(x.note||"")}</textarea>
   <div class="acts"><button type="button" class="btn ghost" data-close>Cancelar</button><button class="btn">Guardar</button></div>
@@ -376,10 +413,38 @@ function planAlerts(v){
   });
 }
 const allAlerts=v=>[...(v.alerts||[]),...planAlerts(v).filter(a=>!a.none)];
+function baseTypes(){
+  const removed=meta.typesRemoved||[],custom=meta.typesCustom||[];
+  const out=TYPES.filter(t=>!removed.includes(t));
+  custom.forEach(t=>{if(t&&!out.includes(t))out.push(t)});
+  return out;
+}
 function allTypes(){
   const extra=[];
   S.vehicles.forEach(v=>{(v.plan||[]).forEach(p=>extra.push(p.type));(v.records||[]).forEach(r=>extra.push(r.type))});
-  const out=[...TYPES];extra.forEach(t=>{if(t&&!out.includes(t))out.push(t)});return out;
+  const out=[...baseTypes()];extra.forEach(t=>{if(t&&!out.includes(t))out.push(t)});return out;
+}
+function manageTypes(){
+  document.querySelectorAll(".sheet").forEach(s=>s.remove());
+  const list=baseTypes();
+  const d=sheet(`<h2>Gerir tipos de registo</h2><p class="mut">Esta lista é sugerida ao criar registos e intervenções do plano de manutenção, em todas as viaturas. Apagar um tipo aqui não apaga registos já criados com esse tipo.</p>
+  ${list.length?list.map((t,i)=>`<div class="card"><div class="row"><strong>${esc(t)}</strong><button type="button" class="btn del sm" onclick="removeType(${i})">Apagar</button></div></div>`).join(""):`<div class="empty">Sem tipos definidos.</div>`}
+  <label style="margin-top:14px">Adicionar tipo novo</label><div class="g2"><input id="newtype" placeholder="Ex.: Óleo do diferencial"><button type="button" class="btn" id="addtype">Adicionar</button></div>
+  <div class="acts"><button type="button" class="btn ghost" data-close>Fechar</button></div>`,()=>{});
+  d.querySelector("#addtype").onclick=async()=>{
+    const val=(d.querySelector("#newtype").value||"").trim();if(!val)return;
+    meta.typesRemoved=(meta.typesRemoved||[]).filter(x=>x!==val);
+    meta.typesCustom=[...new Set([...(meta.typesCustom||[]),val])];
+    try{await tx("kv","readwrite",s=>s.put(meta,"meta"))}catch(e){}
+    manageTypes();
+  };
+}
+async function removeType(i){
+  const list=baseTypes(),t=list[i];if(t===undefined)return;
+  meta.typesRemoved=[...new Set([...(meta.typesRemoved||[]),t])];
+  meta.typesCustom=(meta.typesCustom||[]).filter(x=>x!==t);
+  try{await tx("kv","readwrite",s=>s.put(meta,"meta"))}catch(e){}
+  manageTypes();
 }
 function planSheet(){
   const v=cur();document.querySelectorAll(".sheet").forEach(s=>s.remove());
@@ -394,7 +459,8 @@ function editPlan(id){
   const mode0=p.km&&p.months?"ambos":p.months?"meses":"km";
   const modeRow=(val,label)=>`<label style="display:flex;gap:8px;align-items:center;font-weight:500"><input type="radio" name="mode" value="${val}" ${mode0===val?"checked":""} style="width:20px;min-height:0" onchange="document.querySelectorAll('.pkm').forEach(e=>e.style.display=(this.value==='km'||this.value==='ambos')?'':'none');document.querySelectorAll('.pmo').forEach(e=>e.style.display=(this.value==='meses'||this.value==='ambos')?'':'none')"> ${label}</label>`;
   sheet(`<h2>${id?"Editar intervenção":"Nova intervenção"}</h2>
-  <label>Nome da intervenção</label><input name="type" required list="typelist" placeholder="Ex.: Óleo do diferencial" value="${esc(p.type||"")}">
+  <div class="row" style="align-items:baseline"><label style="margin:0">Nome da intervenção</label><button type="button" class="btn ghost sm" style="padding:2px 10px;min-height:0" onclick="manageTypes()">Gerir lista</button></div>
+  <input name="type" required list="typelist" placeholder="Ex.: Óleo do diferencial" value="${esc(p.type||"")}">
   <datalist id="typelist">${allTypes().map(t=>`<option value="${esc(t)}">`).join("")}</datalist>
   <label style="margin-top:14px">Controlar por</label>
   <div style="display:flex;gap:16px;flex-wrap:wrap;margin-top:4px">${modeRow("km","Quilómetros")}${modeRow("meses","Tempo")}${modeRow("ambos","Ambos")}</div>
