@@ -3,58 +3,60 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>RLTecAuto</title><meta name="theme-color" content="#0F4C4A">
-<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Barlow:wght@400;500;600&display=swap" rel="stylesheet">
+<title>RLTecAuto</title><meta name="theme-color" content="#102E2C">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet">
 <style>
-:root{--bg:#EEF1F0;--card:#fff;--ink:#16211F;--mut:#5E6D69;--line:#D5DCDA;--pri:#0F4C4A;--onpri:#fff;--warn:#B77700;--warnbg:#FBEFD2;--bad:#B3261E;--badbg:#FADBD8;--ok:#1E7A4C;--okbg:#D9F0E3;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
-@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0F1615;--card:#182321;--ink:#E8EFED;--mut:#93A5A0;--line:#2A3A37;--pri:#5CC2B8;--onpri:#08201D;--warn:#F0B84A;--warnbg:#3A2E10;--bad:#FF8A80;--badbg:#3F1B18;--ok:#6FD3A0;--okbg:#153524}}
-:root[data-theme="dark"]{--bg:#0F1615;--card:#182321;--ink:#E8EFED;--mut:#93A5A0;--line:#2A3A37;--pri:#5CC2B8;--onpri:#08201D;--warn:#F0B84A;--warnbg:#3A2E10;--bad:#FF8A80;--badbg:#3F1B18;--ok:#6FD3A0;--okbg:#153524}
+:root{--bg:#EEF0EE;--card:#FFFFFF;--ink:#151A19;--mut:#5A6462;--line:#D7DBD8;--pri:#102E2C;--pri2:#1A413E;--onpri:#F2F5F3;--warn:#8A5A12;--warnbg:#F2E6CC;--bad:#8C2B22;--badbg:#F3DAD6;--ok:#215C40;--okbg:#D9ECE1;--cut:14px;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0C1110;--card:#151B1A;--ink:#E7ECE9;--mut:#8C9A96;--line:#273331;--pri:#4E9D93;--pri2:#5CB2A7;--onpri:#07201D;--warn:#D9A748;--warnbg:#302405;--bad:#DD7C70;--badbg:#341613;--ok:#6FC79B;--okbg:#102A1C}}
+:root[data-theme="dark"]{--bg:#0C1110;--card:#151B1A;--ink:#E7ECE9;--mut:#8C9A96;--line:#273331;--pri:#4E9D93;--pri2:#5CB2A7;--onpri:#07201D;--warn:#D9A748;--warnbg:#302405;--bad:#DD7C70;--badbg:#341613;--ok:#6FC79B;--okbg:#102A1C}
 *{box-sizing:border-box}
 html{scroll-padding-top:env(safe-area-inset-top,0px)}
 html,body{margin:0}
-body{background:var(--bg);color:var(--ink);font:16px/1.45 Barlow,system-ui,-apple-system,"Segoe UI",sans-serif;min-height:100vh}
-h1,h2,h3,.num{font-family:"Barlow Condensed","Arial Narrow",sans-serif;font-weight:600;margin:0;letter-spacing:.01em}
+body{background:var(--bg);color:var(--ink);font:15px/1.5 Inter,system-ui,-apple-system,"Segoe UI",sans-serif;min-height:100vh}
+h1,h2,h3{font-family:"Space Grotesk",system-ui,sans-serif;font-weight:600;margin:0;letter-spacing:-.01em}
+.num{font-family:"JetBrains Mono","Space Grotesk",monospace;font-weight:600;margin:0;font-variant-numeric:tabular-nums;letter-spacing:-.02em}
 main{max-width:560px;margin:0 auto;padding:16px 16px 96px}
 button,input,select,textarea{font:inherit;color:inherit}
 button{cursor:pointer}
-.btn{background:var(--pri);color:var(--onpri);border:0;border-radius:10px;padding:12px 18px;font-weight:600;min-height:44px}
-.btn.ghost{background:transparent;color:var(--pri);border:1.5px solid var(--pri)}
-.btn.sm{padding:6px 12px;min-height:34px;font-size:14px}
-.btn.del{background:transparent;color:var(--bad);border:1.5px solid var(--bad)}
+.btn{background:var(--pri);color:var(--onpri);border:0;border-radius:2px;clip-path:polygon(0 0,calc(100% - var(--cut)) 0,100% var(--cut),100% 100%,0 100%);padding:12px 20px 12px 16px;font-weight:600;min-height:44px;letter-spacing:.01em}
+.btn.ghost{background:transparent;color:var(--pri);border:1.5px solid var(--line);clip-path:none;border-radius:2px}
+.btn.sm{padding:6px 12px;min-height:34px;font-size:13px;clip-path:none;border-radius:2px}
+.btn.del{background:transparent;color:var(--bad);border:1.5px solid var(--bad);clip-path:none;border-radius:2px}
 .top{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:14px}
-.top h1{font-size:30px}
-.plate{display:inline-flex;align-items:stretch;border:2px solid var(--ink);border-radius:6px;overflow:hidden;background:#fff;color:#111;font-family:"Barlow Condensed",sans-serif;font-weight:700;font-size:20px;letter-spacing:.08em}
-.plate i{background:#0A3D91;color:#fff;font-style:normal;font-size:11px;padding:2px 5px;display:flex;align-items:flex-end}
-.plate b{padding:1px 10px;font-weight:700}
-.veh{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:12px;margin-bottom:12px;cursor:pointer}.vtop{display:flex;gap:12px;align-items:center}.chev{font-size:30px;color:var(--mut)}.vsum{border-top:1px solid var(--line);margin-top:10px;padding-top:8px}.arow{display:flex;justify-content:space-between;gap:8px;align-items:center;padding:3px 0;font-weight:500}#bn{display:none;position:sticky;top:0;z-index:8;background:var(--badbg);color:var(--bad);padding:8px 12px;font-size:14px;text-align:center}
-.thumb{width:64px;height:64px;border-radius:10px;background:var(--line);object-fit:cover;flex:none;display:grid;place-items:center;color:var(--mut);font-size:26px}
-.veh h2{font-size:22px}
-.mut{color:var(--mut);font-size:14px}
-.tabs{display:flex;gap:4px;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:4px;margin:14px 0}
-.tabs button{flex:1;border:0;background:transparent;padding:9px 4px;border-radius:9px;font-weight:600;color:var(--mut)}
-.tabs button[aria-selected="true"]{background:var(--pri);color:var(--onpri)}
-.hero{background:var(--pri);color:var(--onpri);border-radius:16px;padding:16px;display:flex;gap:14px;align-items:center}
-.hero .num{font-size:52px;line-height:1}
-.hero .thumb{background:rgba(255,255,255,.18);color:inherit}
+.top h1{font-size:26px;display:flex;align-items:center;gap:10px}
+.brand{width:30px;height:30px;flex:none;background:var(--pri);color:var(--onpri);display:grid;place-items:center;font:700 13px/1 "Space Grotesk",sans-serif;clip-path:polygon(0 0,70% 0,100% 30%,100% 100%,0 100%)}
+.plate{display:inline-flex;align-items:stretch;border:1.5px solid var(--ink);border-radius:3px;overflow:hidden;background:#fff;color:#14181a;font-family:"JetBrains Mono",monospace;font-weight:600;font-size:18px;letter-spacing:.06em}
+.plate i{background:#1E3A5F;color:#fff;font-style:normal;font-size:10px;padding:2px 5px;display:flex;align-items:flex-end}
+.plate b{padding:1px 10px;font-weight:600}
+.veh{background:var(--card);border:1px solid var(--line);border-left:3px solid var(--pri);border-radius:2px;padding:12px;margin-bottom:10px;cursor:pointer}.vtop{display:flex;gap:12px;align-items:center}.chev{font-size:26px;color:var(--mut)}.vsum{border-top:1px solid var(--line);margin-top:10px;padding-top:8px}.arow{display:flex;justify-content:space-between;gap:8px;align-items:center;padding:3px 0;font-weight:500;font-size:14px}#bn{display:none;position:sticky;top:0;z-index:8;background:var(--badbg);color:var(--bad);padding:8px 12px;font-size:14px;text-align:center}
+.thumb{width:60px;height:60px;border-radius:2px;background:var(--line);object-fit:cover;flex:none;display:grid;place-items:center;color:var(--mut);font-size:24px}
+.veh h2{font-size:19px}
+.mut{color:var(--mut);font-size:13px}
+.tabs{display:flex;gap:2px;border-bottom:1px solid var(--line);margin:16px 0 14px;padding:0}
+.tabs button{flex:1;border:0;background:transparent;padding:10px 4px;font-weight:600;font-size:14px;color:var(--mut);border-bottom:2px solid transparent;margin-bottom:-1px}
+.tabs button[aria-selected="true"]{color:var(--pri);border-bottom-color:var(--pri)}
+.hero{background:var(--pri);background-image:linear-gradient(135deg,var(--pri),var(--pri2));color:var(--onpri);clip-path:polygon(0 0,calc(100% - 22px) 0,100% 22px,100% 100%,0 100%);padding:18px 20px;display:flex;gap:14px;align-items:center}
+.hero .num{font-size:44px;line-height:1}
+.hero .thumb{background:rgba(255,255,255,.16);color:inherit}
 .stats{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:12px 0}
-.stat{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px}
-.stat .num{font-size:28px}
-.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px;margin-bottom:10px}
+.stat{background:var(--card);border:1px solid var(--line);border-radius:2px;padding:12px}
+.stat .num{font-size:24px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:2px;padding:12px;margin-bottom:10px}
 .row{display:flex;justify-content:space-between;gap:8px;align-items:flex-start}
-.tag{display:inline-block;font-size:13px;font-weight:600;border-radius:99px;padding:2px 10px;background:var(--line)}
+.tag{display:inline-block;font-size:12px;font-weight:600;border-radius:2px;padding:3px 9px;background:var(--line);letter-spacing:.01em}
 .tag.bad{background:var(--badbg);color:var(--bad)}.tag.warn{background:var(--warnbg);color:var(--warn)}.tag.ok{background:var(--okbg);color:var(--ok)}
 .photos{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
-.photos img{width:64px;height:64px;object-fit:cover;border-radius:8px;cursor:zoom-in}
-.fab{position:fixed;right:16px;bottom:calc(16px + env(safe-area-inset-bottom,0px));box-shadow:0 4px 14px rgba(0,0,0,.3);border-radius:99px;padding:14px 22px}
-.sheet{position:fixed;inset:0;background:rgba(0,0,0,.5);display:flex;align-items:flex-end;justify-content:center;z-index:5}
-.sheet form,.sheet .box{background:var(--card);width:100%;max-width:560px;max-height:92%;overflow:auto;border-radius:18px 18px 0 0;padding:18px 16px calc(18px + env(safe-area-inset-bottom,0px))}
-label{display:block;font-weight:600;font-size:14px;margin:12px 0 4px}
-input,select,textarea{width:100%;background:var(--bg);border:1.5px solid var(--line);border-radius:10px;padding:10px 12px;min-height:44px}
-:focus-visible{outline:3px solid var(--pri);outline-offset:2px}
+.photos img{width:60px;height:60px;object-fit:cover;border-radius:2px;cursor:zoom-in;border:1px solid var(--line)}
+.fab{position:fixed;right:16px;bottom:calc(16px + env(safe-area-inset-bottom,0px));box-shadow:0 2px 10px rgba(0,0,0,.25);clip-path:polygon(0 0,calc(100% - 16px) 0,100% 16px,100% 100%,0 100%);border-radius:2px;padding:14px 22px}
+.sheet{position:fixed;inset:0;background:rgba(10,14,13,.55);display:flex;align-items:flex-end;justify-content:center;z-index:5}
+.sheet form,.sheet .box{background:var(--card);width:100%;max-width:560px;max-height:92%;overflow:auto;border-radius:10px 10px 0 0;padding:18px 16px calc(18px + env(safe-area-inset-bottom,0px));border-top:3px solid var(--pri)}
+label{display:block;font-weight:600;font-size:14px;margin:12px 0 4px;color:var(--ink)}
+input,select,textarea{width:100%;background:var(--bg);border:1.5px solid var(--line);border-radius:2px;padding:10px 12px;min-height:44px;font-size:15px}
+:focus-visible{outline:2px solid var(--pri);outline-offset:1px}
 .g2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 .acts{display:flex;gap:8px;margin-top:16px}.acts .btn{flex:1}
-.empty{text-align:center;color:var(--mut);padding:28px 12px;border:1.5px dashed var(--line);border-radius:12px}
-#lb{position:fixed;inset:0;background:#000d;display:none;place-items:center;z-index:9}#lb img{max-width:96%;max-height:90%;border-radius:8px}
+.empty{text-align:center;color:var(--mut);padding:28px 12px;border:1.5px dashed var(--line);border-radius:2px}
+#lb{position:fixed;inset:0;background:#000d;display:none;place-items:center;z-index:9}#lb img{max-width:96%;max-height:90%;border-radius:4px}
 </style>
 </head>
 <body>
@@ -176,7 +178,7 @@ const near=(a,v)=>{const i=alertInfo(a,v);return((i.days!==null&&i.days<=60)||(i
 const openV=id=>{S.sel=id;S.tab="resumo";render()};
 function listView(){
   const n=S.vehicles.reduce((s,v)=>s+allAlerts(v).filter(a=>near(a,v)).length,0);
-  return `<div class="top"><h1>RLTecAuto</h1><button class="btn ghost sm" onclick="backup()">Cópia</button></div>
+  return `<div class="top"><h1><span class="brand">RT</span>RLTecAuto</h1><button class="btn ghost sm" onclick="backup()">Cópia</button></div>
   ${bkNote()}
   ${n?`<p class="mut" style="margin:0 0 12px">${n} aviso${n>1?"s":""} nos próximos 2 meses (ou a menos de 2 000 km)</p>`:""}
   ${S.vehicles.length?S.vehicles.map(vcard).join(""):`<div class="empty">Ainda não tens nenhuma viatura.<br>Adiciona a primeira para começar a registar.</div>`}
@@ -239,13 +241,43 @@ const TECH_SUG={
   peca:["Filtro de óleo — referência","Filtro de ar — referência","Filtro de combustível — referência","Filtro de habitáculo — referência","Velas — referência","Bateria — referência","Pastilhas de travão — dianteiras","Pastilhas de travão — traseiras","Discos de travão — referência","Correia de distribuição — referência","Pneus — medida"],
   outro:["Chassis (VIN)","Código da tinta","Código do motor","Caixa de velocidades","Óleo motor — especificação","Óleo caixa — especificação","Correia de distribuição — intervalo"]
 };
+function techCats(){
+  const removed=meta.techCatsRemoved||[];
+  const custom=meta.techCatsCustom||[];
+  const base=TECH_CATS.filter(([k])=>!removed.includes(k));
+  return [...base,...custom.map(c=>[c.key,c.label])];
+}
+function manageTechCats(){
+  document.querySelectorAll(".sheet").forEach(s=>s.remove());
+  const cats=techCats();
+  const d=sheet(`<h2>Gerir categorias — Técnico</h2><p class="mut">As categorias organizam os detalhes técnicos em todas as viaturas. Apagar uma categoria move os detalhes dela para "Outros detalhes".</p>
+  ${cats.map(([k,l])=>`<div class="card"><div class="row"><strong>${esc(l)}</strong>${k==="outro"?`<span class="mut">fixa</span>`:`<button type="button" class="btn del sm" onclick="removeTechCat('${k}')">Apagar</button>`}</div></div>`).join("")}
+  <label style="margin-top:14px">Nova categoria</label><div class="g2"><input id="newcat" placeholder="Ex.: Elétrico"><button type="button" class="btn" id="addcat">Adicionar</button></div>
+  <div class="acts"><button type="button" class="btn ghost" data-close>Fechar</button></div>`,()=>{});
+  d.querySelector("#addcat").onclick=async()=>{
+    const val=(d.querySelector("#newcat").value||"").trim();if(!val)return;
+    meta.techCatsCustom=[...(meta.techCatsCustom||[]),{key:"c_"+uid(),label:val}];
+    try{await tx("kv","readwrite",s=>s.put(meta,"meta"))}catch(e){}
+    manageTechCats();
+  };
+}
+async function removeTechCat(key){
+  if(key==="outro")return;
+  if(!confirm('Apagar esta categoria? Os detalhes técnicos que a usam passam para "Outros detalhes".'))return;
+  S.vehicles.forEach(v=>{(v.tech||[]).forEach(t=>{if(t.cat===key)t.cat="outro"})});
+  meta.techCatsRemoved=[...new Set([...(meta.techCatsRemoved||[]),key])];
+  meta.techCatsCustom=(meta.techCatsCustom||[]).filter(c=>c.key!==key);
+  try{await tx("kv","readwrite",s=>s.put(meta,"meta"))}catch(e){}
+  save();manageTechCats();
+}
 function tecnico(v){
   const t=v.tech||[];
-  if(!t.length)return `<div class="empty">Sem detalhes técnicos. Guarda aqui capacidades, referências de peças, chassis e outras especificações — os campos são livres, define-os como quiseres.</div>`;
-  return TECH_CATS.map(([cat,label])=>{
+  const catbar=`<div class="acts" style="margin:0 0 12px"><button class="btn ghost" onclick="manageTechCats()">Gerir categorias</button></div>`;
+  if(!t.length)return catbar+`<div class="empty">Sem detalhes técnicos. Guarda aqui capacidades, referências de peças, chassis e outras especificações — os campos são livres, define-os como quiseres.</div>`;
+  return catbar+techCats().map(([cat,label])=>{
     const items=t.filter(x=>(x.cat||"outro")===cat);
     if(!items.length)return "";
-    return `<h3 style="margin:16px 0 8px">${label}</h3>`+items.map(x=>`<div class="card"><div class="row"><div style="flex:1"><strong>${esc(x.label)}</strong><div style="margin-top:2px">${esc(x.value)||`<span class="mut">—</span>`}</div>${x.note?`<div class="mut" style="margin-top:4px">${esc(x.note)}</div>`:""}</div></div>
+    return `<h3 style="margin:16px 0 8px">${esc(label)}</h3>`+items.map(x=>`<div class="card"><div class="row"><div style="flex:1"><strong>${esc(x.label)}</strong><div style="margin-top:2px">${esc(x.value)||`<span class="mut">—</span>`}</div>${x.note?`<div class="mut" style="margin-top:4px">${esc(x.note)}</div>`:""}</div></div>
     <div class="acts" style="margin-top:10px"><button class="btn ghost sm" onclick="editTech('${x.id}')">Editar</button></div></div>`).join("");
   }).join("");
 }
@@ -277,7 +309,8 @@ function editKm(){
   const v=cur(),sleep=ms=>new Promise(r=>setTimeout(r,ms));
   const d=sheet(`<h2>Atualizar quilómetros</h2>
   <button type="button" class="btn ghost" id="kmcam" style="width:100%">Abrir câmara e ler o quadrante</button>
-  <div id="kmbox" style="display:none;margin-top:8px"><div style="position:relative;overflow:hidden;border-radius:10px;background:#000"><video id="kmvid" autoplay playsinline muted style="width:100%;display:block"></video><div style="position:absolute;left:10%;right:10%;top:35%;height:30%;border:3px solid #fff;border-radius:8px;box-shadow:0 0 0 999px rgba(0,0,0,.4);pointer-events:none"></div></div>
+  <p class="mut" style="margin-top:6px">Enquadra só o número total (o maior, sem casas decimais). Se o parcial estiver colado a ele, aproxima a câmara para deixar o parcial fora da moldura.</p>
+  <div id="kmbox" style="display:none;margin-top:8px"><div style="position:relative;overflow:hidden;border-radius:10px;background:#000"><video id="kmvid" autoplay playsinline muted style="width:100%;display:block"></video><div style="position:absolute;left:14%;right:14%;top:40%;height:20%;border:3px solid #fff;border-radius:8px;box-shadow:0 0 0 999px rgba(0,0,0,.4);pointer-events:none"></div></div>
   <div class="acts"><button type="button" class="btn" id="kmuse" disabled>Usar este valor</button><button type="button" class="btn ghost" id="kmstop">Fechar câmara</button></div></div>
   <div id="kmmsg" class="mut" style="margin-top:6px"></div>
   <label>Quilómetros atuais</label><input name="km" type="number" inputmode="numeric" min="0" required value="${v.km||""}">
@@ -297,18 +330,21 @@ function editKm(){
     try{
       if(!window.Tesseract)await new Promise((ok,ko)=>{const s=document.createElement("script");s.src="https://cdnjs.cloudflare.com/ajax/libs/tesseract.js/5.1.1/tesseract.min.js";s.onload=ok;s.onerror=ko;document.head.appendChild(s)});
       worker=await Tesseract.createWorker("eng");
-      await worker.setParameters({tessedit_char_whitelist:"0123456789",tessedit_pageseg_mode:"11"});
+      await worker.setParameters({tessedit_char_whitelist:"0123456789.",tessedit_pageseg_mode:"11"});
     }catch(e){m.textContent="Leitura automática indisponível (sem internet?). Vê o número na câmara e escreve-o abaixo.";return}
     const c=document.createElement("canvas"),cx=c.getContext("2d"),curKm=Number(v.km)||0;
     try{
       while(run){
         const w=vid.videoWidth,h=vid.videoHeight;if(!w){await sleep(300);continue}
-        c.width=w*.8;c.height=h*.3;cx.drawImage(vid,w*.1,h*.35,w*.8,h*.3,0,0,c.width,c.height);
+        c.width=w*.72;c.height=h*.2;cx.drawImage(vid,w*.14,h*.4,w*.72,h*.2,0,0,c.width,c.height);
         const r=await worker.recognize(c);if(!run)break;
-        const nums=[...new Set((r.data.text.match(/\d{4,7}/g)||[]).map(Number))];
+        // O odómetro parcial mostra casas decimais (ex.: 512.3); o total é sempre um número inteiro.
+        // Ignoramos qualquer número com ponto decimal, para não confundir os dois.
+        const tokens=r.data.text.match(/\d+\.\d+|\d+/g)||[];
+        const nums=[...new Set(tokens.filter(t=>!t.includes(".")&&t.length>=4&&t.length<=7).map(Number))];
         const up=nums.filter(n=>n>=curKm).sort((a,b)=>a-b),pick=up.length?up[0]:nums.sort((a,b)=>b-a)[0];
         if(pick){use.dataset.v=pick;use.disabled=false;m.textContent="A ler: "+fmtKm(pick)+". Se estiver certo, toca em «Usar este valor»."}
-        else m.textContent="A procurar números… põe o odómetro dentro da moldura e mantém o telemóvel firme.";
+        else m.textContent="A procurar o odómetro total… afasta o parcial (o dos decimais) de dentro da moldura, se possível.";
         await sleep(300);
       }
     }catch(e){if(run)m.textContent="A leitura falhou. Escreve o valor manualmente."}
@@ -356,7 +392,7 @@ function techFieldList(cat){
 function techCatChange(val){const el=document.getElementById("techlist");if(el)el.innerHTML=techFieldList(val).map(t=>`<option value="${esc(t)}">`).join("")}
 function manageTechFields(cat){
   document.querySelectorAll(".sheet").forEach(s=>s.remove());
-  const label=(TECH_CATS.find(c=>c[0]===cat)||["","Detalhes"])[1];
+  const label=(techCats().find(c=>c[0]===cat)||["","Detalhes"])[1];
   const list=techFieldList(cat);
   const d=sheet(`<h2>Gerir lista — ${esc(label)}</h2><p class="mut">Estes campos são sugeridos ao criar um detalhe técnico nesta categoria, em todas as viaturas. Apagar um campo aqui não apaga os detalhes já guardados.</p>
   ${list.length?list.map((t,i)=>`<div class="card"><div class="row"><strong>${esc(t)}</strong><button type="button" class="btn del sm" onclick="removeTechField('${cat}',${i})">Apagar</button></div></div>`).join(""):`<div class="empty">Sem campos definidos.</div>`}
@@ -386,7 +422,7 @@ function editTech(id){
   const catRow=(val,label)=>`<label style="display:flex;gap:8px;align-items:center;font-weight:500"><input type="radio" name="cat" value="${val}" ${cat0===val?"checked":""} style="width:20px;min-height:0" onchange="techCatChange(this.value)"> ${label}</label>`;
   sheet(`<h2>${id?"Editar detalhe":"Novo detalhe técnico"}</h2>
   <label>Categoria</label>
-  <div style="display:flex;gap:16px;flex-wrap:wrap;margin-top:4px">${TECH_CATS.map(([v2,l])=>catRow(v2,l)).join("")}</div>
+  <div style="display:flex;gap:16px;flex-wrap:wrap;margin-top:4px">${techCats().map(([v2,l])=>catRow(v2,l)).join("")}</div>
   <div class="row" style="align-items:baseline;margin-top:14px"><label style="margin:0">Campo</label><button type="button" class="btn ghost sm" style="padding:2px 10px;min-height:0" onclick="manageTechFields(document.querySelector('input[name=cat]:checked').value)">Gerir lista</button></div>
   <input name="label" required list="techlist" placeholder="Ex.: Óleo motor — capacidade (L)" value="${esc(x.label||"")}">
   <datalist id="techlist">${techFieldList(cat0).map(t=>`<option value="${esc(t)}">`).join("")}</datalist>

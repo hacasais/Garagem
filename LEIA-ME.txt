@@ -27,3 +27,10 @@ Passar os dados da versão HTML
 Notas
 - A app guarda também uma cópia interna. Se a desinstalares, essa cópia perde-se; o ficheiro escolhido mantém-se.
 - Não escolhas uma pasta sincronizada por apps que possam duplicar ficheiros se não quiseres surpresas.
+
+Avisos com a app fechada
+- Na primeira abertura, o Android pergunta se autorizas notificações — aceita, senão nunca recebes avisos.
+- Em segundo plano (a cada ~6 horas), a app lê o ficheiro de dados e verifica os avisos do plano de manutenção e os avisos manuais.
+- Só notifica quando algo está vencido, a menos de 14 dias, ou a menos de 500 km — para não incomodar com avisos distantes.
+- O Android pode atrasar esta verificação (poupança de bateria, "doze mode"), por isso não é um alarme exato ao minuto. Se o telemóvel tiver otimização de bateria agressiva para esta app, pode valer a pena desativá-la nas definições do sistema para a Garagem/RLTecAuto.
+- Se nunca escolheste um ficheiro de dados (Cópia > Criar/Escolher), não há nada a verificar e não aparece nenhuma notificação.

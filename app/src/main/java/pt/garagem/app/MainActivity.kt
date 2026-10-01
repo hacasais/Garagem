@@ -6,6 +6,7 @@ import android.app.AlertDialog
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
 import android.provider.OpenableColumns
 import android.webkit.JavascriptInterface
@@ -18,6 +19,10 @@ import android.webkit.WebResourceResponse
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.webkit.WebViewAssetLoader
+import androidx.work.ExistingPeriodicWorkPolicy
+import androidx.work.PeriodicWorkRequestBuilder
+import androidx.work.WorkManager
+import java.util.concurrent.TimeUnit
 
 class MainActivity : Activity() {
     private lateinit var web: WebView
@@ -142,6 +147,14 @@ class MainActivity : Activity() {
             }
         }
         web.loadUrl("https://appassets.androidplatform.net/assets/index.html")
+
+        if (Build.VERSION.SDK_INT >= 33 &&
+            checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+            requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 20)
+        }
+        val work = PeriodicWorkRequestBuilder<AlertWorker>(6, TimeUnit.HOURS).build()
+        WorkManager.getInstance(this)
+            .enqueueUniquePeriodicWork("garagem_alert_check", ExistingPeriodicWorkPolicy.KEEP, work)
     }
 
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {

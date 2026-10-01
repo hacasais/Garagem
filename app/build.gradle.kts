@@ -34,4 +34,8 @@ android {
     }
     kotlinOptions { jvmTarget = "17" }
 }
-dependencies { implementation("androidx.webkit:webkit:1.9.0") }
+dependencies {
+    implementation("androidx.webkit:webkit:1.9.0")
+    implementation("androidx.work:work-runtime-ktx:2.9.0")
+    implementation("androidx.core:core-ktx:1.12.0")
+}
