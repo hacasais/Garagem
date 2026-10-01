@@ -307,13 +307,13 @@ function editVeh(id){
 function delVeh(id){if(confirm("Apagar esta viatura e todos os registos? Não é possível desfazer.")){removed.add(id);S.vehicles=S.vehicles.filter(v=>v.id!==id);S.sel=null;document.querySelector(".sheet")?.remove();render()}}
 function editKm(){
   const v=cur(),sleep=ms=>new Promise(r=>setTimeout(r,ms));
-  const d=sheet(`<h2>Atualizar quilómetros</h2>
-  <button type="button" class="btn ghost" id="kmcam" style="width:100%">Abrir câmara e ler o quadrante</button>
-  <p class="mut" style="margin-top:6px">Enquadra só o número total (o maior, sem casas decimais). Se o parcial estiver colado a ele, aproxima a câmara para deixar o parcial fora da moldura.</p>
-  <div id="kmbox" style="display:none;margin-top:8px"><div style="position:relative;overflow:hidden;border-radius:10px;background:#000"><video id="kmvid" autoplay playsinline muted style="width:100%;display:block"></video><div style="position:absolute;left:14%;right:14%;top:40%;height:20%;border:3px solid #fff;border-radius:8px;box-shadow:0 0 0 999px rgba(0,0,0,.4);pointer-events:none"></div></div>
-  <div class="acts"><button type="button" class="btn" id="kmuse" disabled>Usar este valor</button><button type="button" class="btn ghost" id="kmstop">Fechar câmara</button></div></div>
-  <div id="kmmsg" class="mut" style="margin-top:6px"></div>
-  <label>Quilómetros atuais</label><input name="km" type="number" inputmode="numeric" min="0" required value="${v.km||""}">
+  const d=sheet(`<h2 style="font-size:19px">Atualizar quilómetros</h2>
+  <button type="button" class="btn ghost sm" id="kmcam" style="width:100%;margin-top:8px">Abrir câmara e ler o quadrante</button>
+  <p class="mut" id="kmhint" style="margin:6px 0 0">Enquadra só o número total (sem casas decimais).</p>
+  <div id="kmbox" style="display:none;margin-top:8px"><div style="position:relative;overflow:hidden;border-radius:8px;background:#000;max-height:34vh"><video id="kmvid" autoplay playsinline muted style="width:100%;max-height:34vh;object-fit:cover;display:block"></video><div style="position:absolute;left:14%;right:14%;top:40%;height:20%;border:3px solid #fff;border-radius:8px;box-shadow:0 0 0 999px rgba(0,0,0,.4);pointer-events:none"></div></div>
+  <div class="acts" style="margin-top:8px"><button type="button" class="btn sm" id="kmuse" disabled>Usar valor</button><button type="button" class="btn ghost sm" id="kmstop">Fechar câmara</button></div></div>
+  <div id="kmmsg" class="mut" style="margin-top:6px;min-height:18px"></div>
+  <label style="margin-top:10px">Quilómetros atuais</label><input name="km" type="number" inputmode="numeric" min="0" required value="${v.km||""}">
   <div class="acts"><button type="button" class="btn ghost" data-close>Cancelar</button><button class="btn">Guardar</button></div>`,
   f=>{const n=Number(f.get("km"))||0;if(n<(v.km||0)&&!confirm("O valor é inferior ao atual. Guardar mesmo assim?"))return;v.km=n});
   const $d=s=>d.querySelector(s),cam=$d("#kmcam"),box=$d("#kmbox"),vid=$d("#kmvid"),m=$d("#kmmsg"),inp=$d("[name=km]"),use=$d("#kmuse");
