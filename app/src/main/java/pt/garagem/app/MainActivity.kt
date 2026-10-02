@@ -5,10 +5,22 @@ import android.app.Activity
 import android.app.AlertDialog
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.graphics.Matrix
+import android.media.ExifInterface
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.provider.MediaStore
 import android.provider.OpenableColumns
+import androidx.core.content.FileProvider
+import com.google.mlkit.vision.common.InputImage
+import com.google.mlkit.vision.text.TextRecognition
+import com.google.mlkit.vision.text.latin.TextRecognizerOptions
+import org.json.JSONArray
+import org.json.JSONObject
+import java.io.File
 import android.webkit.JavascriptInterface
 import android.webkit.JsResult
 import android.webkit.PermissionRequest
@@ -90,6 +102,82 @@ class MainActivity : Activity() {
 
         @JavascriptInterface
         fun clearFile() { prefs.edit().remove("uri").apply() }
+
+        @JavascriptInterface
+        fun scanOdometer() {
+            runOnUiThread {
+                try {
+                    val dir = File(cacheDir, "odo").apply { mkdirs() }
+                    val file = File.createTempFile("odo_", ".jpg", dir)
+                    photoFile = file
+                    val uri = FileProvider.getUriForFile(this@MainActivity, "$packageName.fileprovider", file)
+                    val intent = Intent(MediaStore.ACTION_IMAGE_CAPTURE).apply {
+                        putExtra(MediaStore.EXTRA_OUTPUT, uri)
+                        addFlags(Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
+                    }
+                    if (intent.resolveActivity(packageManager) != null) {
+                        startActivityForResult(intent, 4)
+                    } else {
+                        callJs(JSONObject().put("ok", false).put("error", "Sem app de câmara disponível"))
+                    }
+                } catch (e: Exception) {
+                    callJs(JSONObject().put("ok", false).put("error", e.message ?: "erro ao abrir a câmara"))
+                }
+            }
+        }
+    }
+
+    private var photoFile: File? = null
+
+    private fun callJs(json: JSONObject) {
+        web.evaluateJavascript("window.onOdometerScan&&window.onOdometerScan(${JSONObject.quote(json.toString())})", null)
+    }
+
+    private fun processOdometerPhoto() {
+        val file = photoFile
+        if (file == null || !file.exists()) { callJs(JSONObject().put("ok", false).put("error", "fotografia não encontrada")); return }
+        try {
+            var bmp: Bitmap = BitmapFactory.decodeFile(file.absolutePath)
+                ?: throw Exception("não foi possível abrir a fotografia")
+            val orientation = ExifInterface(file.absolutePath).getAttributeInt(
+                ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_NORMAL)
+            val rotation = when (orientation) {
+                ExifInterface.ORIENTATION_ROTATE_90 -> 90f
+                ExifInterface.ORIENTATION_ROTATE_180 -> 180f
+                ExifInterface.ORIENTATION_ROTATE_270 -> 270f
+                else -> 0f
+            }
+            if (rotation != 0f) {
+                val m = Matrix().apply { postRotate(rotation) }
+                bmp = Bitmap.createBitmap(bmp, 0, 0, bmp.width, bmp.height, m, true)
+            }
+            val image = InputImage.fromBitmap(bmp, 0)
+            TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS).process(image)
+                .addOnSuccessListener { result ->
+                    val candidates = extractCandidates(result.text)
+                    val arr = JSONArray()
+                    candidates.forEach { arr.put(it) }
+                    callJs(JSONObject().put("ok", true).put("candidates", arr))
+                    file.delete()
+                }
+                .addOnFailureListener { e ->
+                    callJs(JSONObject().put("ok", false).put("error", e.message ?: "falha no reconhecimento"))
+                    file.delete()
+                }
+        } catch (e: Exception) {
+            callJs(JSONObject().put("ok", false).put("error", e.message ?: "erro ao processar a fotografia"))
+        }
+    }
+
+    // Números de 4 a 7 dígitos, sem ponto nem vírgula decimal (o odómetro total é sempre inteiro;
+    // o parcial costuma ter casas decimais, por isso fica de fora à partida).
+    private fun extractCandidates(text: String): List<Long> {
+        val tokens = Regex("\\d+(?:[.,]\\d+)?").findAll(text).map { it.value }.toList()
+        return tokens.filter { !it.contains(".") && !it.contains(",") }
+            .mapNotNull { it.toLongOrNull() }
+            .filter { it in 1000..9999999 }
+            .distinct()
+            .sortedDescending()
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -184,6 +272,13 @@ class MainActivity : Activity() {
             3 -> {
                 chooser?.onReceiveValue(WebChromeClient.FileChooserParams.parseResult(resultCode, data))
                 chooser = null
+            }
+            4 -> {
+                if (resultCode == RESULT_OK) {
+                    processOdometerPhoto()
+                } else {
+                    callJs(JSONObject().put("ok", false).put("error", "cancelado"))
+                }
             }
         }
     }

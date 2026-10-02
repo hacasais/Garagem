@@ -308,128 +308,42 @@ function delVeh(id){if(confirm("Apagar esta viatura e todos os registos? Não é
 function editKm(){
   const v=cur();
   const d=sheet(`<h2 style="font-size:19px">Atualizar quilómetros</h2>
-  <button type="button" class="btn ghost sm" id="kmcam" style="width:100%;margin-top:8px">Abrir câmara e ler o quadrante</button>
-  <p class="mut" id="kmhint" style="margin:6px 0 0">Arrasta a caixa branca até cobrir só o número total, depois tira a foto.</p>
-  <div id="kmbox" style="display:none;margin-top:8px">
-    <div id="kmstage" style="position:relative;overflow:hidden;border-radius:8px;background:#000;height:34vh;touch-action:none">
-      <video id="kmvid" autoplay playsinline muted style="position:absolute;inset:0;width:100%;height:100%;object-fit:contain;display:block"></video>
-      <div id="kmcrop" style="position:absolute;left:8%;right:8%;top:40%;height:20%;border:3px solid #fff;box-shadow:0 0 0 999px rgba(0,0,0,.45);touch-action:none;cursor:move">
-        <div data-h="t" style="position:absolute;left:0;right:0;top:-12px;height:24px;cursor:ns-resize"></div>
-        <div data-h="b" style="position:absolute;left:0;right:0;bottom:-12px;height:24px;cursor:ns-resize"></div>
-      </div>
-    </div>
-    <div class="acts" style="margin-top:8px"><button type="button" class="btn sm" id="kmshoot">Tirar foto e ler</button><button type="button" class="btn ghost sm" id="kmstop">Fechar câmara</button></div>
-  </div>
+  <button type="button" class="btn ghost sm" id="kmcam" style="width:100%;margin-top:8px">Fotografar o quadrante</button>
+  <p class="mut" style="margin:6px 0 0">Abre a câmara do telemóvel — usa o zoom dela para aproximares bem do odómetro.</p>
   <div id="kmmsg" class="mut" style="margin-top:6px;min-height:18px"></div>
-  <div class="acts" id="kmusewrap" style="display:none;margin-top:4px"><button type="button" class="btn sm" id="kmuse">Usar este valor</button></div>
+  <div id="kmcands" style="display:none;gap:8px;flex-wrap:wrap;margin-top:4px"></div>
   <label style="margin-top:10px">Quilómetros atuais</label><input name="km" type="number" inputmode="numeric" min="0" required value="${v.km||""}">
   <div class="acts"><button type="button" class="btn ghost" data-close>Cancelar</button><button class="btn">Guardar</button></div>`,
-  f=>{stop();const n=Number(f.get("km"))||0;if(n<(v.km||0)&&!confirm("O valor é inferior ao atual. Guardar mesmo assim?"))return;v.km=n});
-  const $d=s=>d.querySelector(s),cam=$d("#kmcam"),box=$d("#kmbox"),stage=$d("#kmstage"),vid=$d("#kmvid"),crop=$d("#kmcrop"),
-        m=$d("#kmmsg"),inp=$d("[name=km]"),use=$d("#kmuse"),usewrap=$d("#kmusewrap");
-  let stream=null,worker=null,drag=null;
+  f=>{const n=Number(f.get("km"))||0;if(n<(v.km||0)&&!confirm("O valor é inferior ao atual. Guardar mesmo assim?"))return;v.km=n});
+  const $d=s=>d.querySelector(s),cam=$d("#kmcam"),m=$d("#kmmsg"),inp=$d("[name=km]"),cands=$d("#kmcands");
+  const curKm=Number(v.km)||0;
 
-  // Arrastar a caixa (mover) e as pegas de cima/baixo (redimensionar), com rato ou toque.
-  function clampCrop(){
-    const sh=stage.clientHeight,min=sh*0.12;
-    let top=parseFloat(crop.style.top),h=parseFloat(crop.style.height);
-    if(h<min)h=min; if(top<0)top=0; if(top+h>sh)top=sh-h;
-    crop.style.top=top+"px";crop.style.height=h+"px";
-  }
-  function toPx(){ // converte os % iniciais em px, uma vez, para podermos arrastar livremente
-    if(crop.dataset.pxready)return;
-    const sh=stage.clientHeight;
-    crop.style.top=(sh*.40)+"px";crop.style.height=(sh*.20)+"px";crop.dataset.pxready="1";
-  }
-  function onDown(e,mode){
-    e.preventDefault();
-    const p=e.touches?e.touches[0]:e;
-    drag={mode,startY:p.clientY,top:parseFloat(crop.style.top),h:parseFloat(crop.style.height)};
-  }
-  function onMove(e){
-    if(!drag)return;
-    const p=e.touches?e.touches[0]:e,dy=p.clientY-drag.startY;
-    if(drag.mode==="move")crop.style.top=(drag.top+dy)+"px";
-    else if(drag.mode==="t"){crop.style.top=(drag.top+dy)+"px";crop.style.height=(drag.h-dy)+"px";}
-    else if(drag.mode==="b")crop.style.height=(drag.h+dy)+"px";
-    clampCrop();
-  }
-  function onUp(){drag=null}
-  crop.addEventListener("mousedown",e=>onDown(e,"move"));
-  crop.addEventListener("touchstart",e=>onDown(e,"move"),{passive:false});
-  crop.querySelector('[data-h="t"]').addEventListener("mousedown",e=>{e.stopPropagation();onDown(e,"t")});
-  crop.querySelector('[data-h="t"]').addEventListener("touchstart",e=>{e.stopPropagation();onDown(e,"t")},{passive:false});
-  crop.querySelector('[data-h="b"]').addEventListener("mousedown",e=>{e.stopPropagation();onDown(e,"b")});
-  crop.querySelector('[data-h="b"]').addEventListener("touchstart",e=>{e.stopPropagation();onDown(e,"b")},{passive:false});
-  document.addEventListener("mousemove",onMove);document.addEventListener("touchmove",onMove,{passive:false});
-  document.addEventListener("mouseup",onUp);document.addEventListener("touchend",onUp);
-
-  const stop=()=>{
-    if(stream)stream.getTracks().forEach(t=>t.stop());stream=null;
-    if(worker)worker.terminate().catch(()=>{});worker=null;
-    document.removeEventListener("mousemove",onMove);document.removeEventListener("touchmove",onMove);
-    document.removeEventListener("mouseup",onUp);document.removeEventListener("touchend",onUp);
-    box.style.display="none";cam.style.display="";
-  };
-  $d("#kmstop").onclick=stop;
-  d.querySelectorAll("[data-close]").forEach(b=>b.addEventListener("click",stop));
-  d.addEventListener("click",e=>{if(e.target===d)stop()});
-  use.onclick=()=>{inp.value=use.dataset.v;usewrap.style.display="none";m.textContent="Valor "+fmtKm(Number(inp.value))+" preenchido. Confirma ou corrige e carrega em Guardar."};
-
-  // Preto e branco de alto contraste — ajuda muito em mostradores digitais/LCD.
-  function bw(canvas){
-    const cx=canvas.getContext("2d"),id=cx.getImageData(0,0,canvas.width,canvas.height),px=id.data;
-    let sum=0;const n=px.length/4;
-    for(let i=0;i<px.length;i+=4)sum+=0.299*px[i]+0.587*px[i+1]+0.114*px[i+2];
-    const mean=sum/n,invert=mean<110;
-    for(let i=0;i<px.length;i+=4){
-      let g=0.299*px[i]+0.587*px[i+1]+0.114*px[i+2],val=g>mean?255:0;if(invert)val=255-val;
-      px[i]=px[i+1]=px[i+2]=val;
+  cam.onclick=()=>{
+    if(!window.Android||typeof Android.scanOdometer!=="function"){
+      m.textContent="A fotografia automática não está disponível aqui. Escreve o valor manualmente.";return;
     }
-    cx.putImageData(id,0,0);
-  }
-
-  cam.onclick=async()=>{
-    try{stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:"environment"},width:{ideal:1280}},audio:false})}
-    catch(e){m.textContent="Não consegui abrir a câmara. Autoriza o acesso à câmara ou escreve o valor manualmente.";return}
-    vid.srcObject=stream;box.style.display="block";cam.style.display="none";
-    await new Promise(r=>{if(vid.readyState>=2)r();else vid.onloadedmetadata=r});
-    await new Promise(r=>requestAnimationFrame(r));
-    toPx();
-    m.textContent="Ajusta a caixa e toca em «Tirar foto e ler».";
-  };
-
-  $d("#kmshoot").onclick=async()=>{
-    if(!vid.videoWidth){m.textContent="A câmara ainda não está pronta, espera um segundo e tenta de novo.";return}
-    usewrap.style.display="none";
-    m.textContent="A preparar a leitura… (precisa de internet)";
-    try{
-      if(!window.Tesseract)await new Promise((ok,ko)=>{const s=document.createElement("script");s.src="https://cdnjs.cloudflare.com/ajax/libs/tesseract.js/5.1.1/tesseract.min.js";s.onload=ok;s.onerror=ko;document.head.appendChild(s)});
-      if(!worker){worker=await Tesseract.createWorker("eng");await worker.setParameters({tessedit_char_whitelist:"0123456789.",tessedit_pageseg_mode:"7"})}
-    }catch(e){m.textContent="Leitura automática indisponível (sem internet?). Vê o número na câmara e escreve-o abaixo.";return}
-
-    // Mapeia a caixa (em pixels do ecrã) para coordenadas reais do vídeo (object-fit:contain).
-    const sw=stage.clientWidth,sh=stage.clientHeight,vw=vid.videoWidth,vh=vid.videoHeight;
-    const scale=Math.min(sw/vw,sh/vh),rw=vw*scale,rh=vh*scale,ox=(sw-rw)/2,oy=(sh-rh)/2;
-    const cropL=stage.clientWidth*0.08,cropR=stage.clientWidth*0.92;
-    const cropT=parseFloat(crop.style.top),cropH=parseFloat(crop.style.height);
-    let nx=(cropL-ox)/scale,ny=(cropT-oy)/scale,nw=(cropR-cropL)/scale,nh=cropH/scale;
-    nx=Math.max(0,nx);ny=Math.max(0,ny);nw=Math.min(nw,vw-nx);nh=Math.min(nh,vh-ny);
-    if(nw<=0||nh<=0){m.textContent="A caixa ficou fora da imagem da câmara. Ajusta-a e tenta de novo.";return}
-
-    const c=document.createElement("canvas");c.width=nw*2;c.height=nh*2; // 2x para melhorar a leitura
-    c.getContext("2d").drawImage(vid,nx,ny,nw,nh,0,0,c.width,c.height);
-    bw(c);
-    const curKm=Number(v.km)||0;
-    try{
-      const r=await worker.recognize(c);
-      // O odómetro parcial mostra casas decimais (ex.: 512.3); o total é sempre um número inteiro.
-      const tokens=r.data.text.match(/\d+\.\d+|\d+/g)||[];
-      const nums=[...new Set(tokens.filter(t=>!t.includes(".")&&t.length>=4&&t.length<=7).map(Number))];
-      const up=nums.filter(n=>n>=curKm).sort((a,b)=>a-b),pick=up.length?up[0]:nums.sort((a,b)=>b-a)[0];
-      if(pick){use.dataset.v=pick;usewrap.style.display="flex";m.textContent="Li: "+fmtKm(pick)+". Confere com o que está na câmara antes de usar."}
-      else m.textContent="Não consegui ler nenhum número aí dentro. Ajusta a caixa só à volta do total e tira outra foto.";
-    }catch(e){m.textContent="A leitura falhou. Tira outra foto ou escreve o valor manualmente."}
+    cands.style.display="none";cands.innerHTML="";
+    m.textContent="A abrir a câmara…";
+    window.onOdometerScan=(jsonStr)=>{
+      let data;try{data=JSON.parse(jsonStr)}catch(e){m.textContent="Não consegui perceber a resposta da câmara.";return}
+      if(!data.ok){
+        m.textContent=data.error==="cancelado"?"Fotografia cancelada.":("Não consegui ler a foto ("+(data.error||"erro")+"). Tenta outra vez ou escreve o valor.");
+        return;
+      }
+      // O odómetro parcial costuma ter casas decimais e por isso já não entra nesta lista (só inteiros de 4 a 7 dígitos).
+      const list=[...new Set(data.candidates||[])].filter(n=>n>=1000);
+      if(!list.length){m.textContent="Não encontrei nenhum número de 4+ dígitos na fotografia. Tira outra, mais perto e com boa luz, ou escreve o valor.";return}
+      const up=list.filter(n=>n>=curKm).sort((a,b)=>a-b),best=up.length?up[0]:[...list].sort((a,b)=>b-a)[0];
+      m.textContent=list.length>1?"Encontrei estes números — toca no que é o total:":"Encontrei este número:";
+      cands.style.display="flex";
+      cands.innerHTML=list.sort((a,b)=>b-a).map(n=>
+        `<button type="button" class="btn ${n===best?"":"ghost"} sm" data-n="${n}">${fmtKm(n)}</button>`).join("");
+      cands.querySelectorAll("button").forEach(b=>b.onclick=()=>{
+        inp.value=b.dataset.n;
+        m.textContent="Valor "+fmtKm(Number(b.dataset.n))+" preenchido. Confirma e carrega em Guardar.";
+      });
+    };
+    try{Android.scanOdometer()}catch(e){m.textContent="Não foi possível abrir a câmara."}
   };
 }
 function editRec(id,pre){
