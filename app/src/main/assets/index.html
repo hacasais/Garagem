@@ -310,7 +310,7 @@ function editKm(){
   const d=sheet(`<h2 style="font-size:19px">Atualizar quilómetros</h2>
   <button type="button" class="btn ghost sm" id="kmcam" style="width:100%;margin-top:8px">Abrir câmara e ler o quadrante</button>
   <p class="mut" id="kmhint" style="margin:6px 0 0">Enquadra só o número total (sem casas decimais).</p>
-  <div id="kmbox" style="display:none;margin-top:8px"><div style="position:relative;overflow:hidden;border-radius:8px;background:#000;max-height:34vh"><video id="kmvid" autoplay playsinline muted style="width:100%;max-height:34vh;object-fit:cover;display:block"></video><div style="position:absolute;left:14%;right:14%;top:40%;height:20%;border:3px solid #fff;border-radius:8px;box-shadow:0 0 0 999px rgba(0,0,0,.4);pointer-events:none"></div></div>
+  <div id="kmbox" style="display:none;margin-top:8px"><div style="position:relative;overflow:hidden;border-radius:8px;background:#000;max-height:34vh"><video id="kmvid" autoplay playsinline muted style="width:100%;max-height:34vh;object-fit:cover;display:block"></video><div style="position:absolute;left:10%;right:10%;top:37%;height:26%;border:3px solid #fff;border-radius:8px;box-shadow:0 0 0 999px rgba(0,0,0,.4);pointer-events:none"></div></div>
   <div class="acts" style="margin-top:8px"><button type="button" class="btn sm" id="kmuse" disabled>Usar valor</button><button type="button" class="btn ghost sm" id="kmstop">Fechar câmara</button></div></div>
   <div id="kmmsg" class="mut" style="margin-top:6px;min-height:18px"></div>
   <label style="margin-top:10px">Quilómetros atuais</label><input name="km" type="number" inputmode="numeric" min="0" required value="${v.km||""}">
@@ -330,13 +330,27 @@ function editKm(){
     try{
       if(!window.Tesseract)await new Promise((ok,ko)=>{const s=document.createElement("script");s.src="https://cdnjs.cloudflare.com/ajax/libs/tesseract.js/5.1.1/tesseract.min.js";s.onload=ok;s.onerror=ko;document.head.appendChild(s)});
       worker=await Tesseract.createWorker("eng");
-      await worker.setParameters({tessedit_char_whitelist:"0123456789.",tessedit_pageseg_mode:"11"});
+      await worker.setParameters({tessedit_char_whitelist:"0123456789.",tessedit_pageseg_mode:"7"});
     }catch(e){m.textContent="Leitura automática indisponível (sem internet?). Vê o número na câmara e escreve-o abaixo.";return}
     const c=document.createElement("canvas"),cx=c.getContext("2d"),curKm=Number(v.km)||0;
+    // Converte o recorte a preto e branco de alto contraste — ajuda muito em mostradores digitais/LCD.
+    function bw(canvas){
+      const cx2=canvas.getContext("2d"),id=cx2.getImageData(0,0,canvas.width,canvas.height),d=id.data;
+      let sum=0;const n=d.length/4;
+      for(let i=0;i<d.length;i+=4)sum+=0.299*d[i]+0.587*d[i+1]+0.114*d[i+2];
+      const mean=sum/n,invert=mean<110;
+      for(let i=0;i<d.length;i+=4){
+        let g=0.299*d[i]+0.587*d[i+1]+0.114*d[i+2];
+        let v=g>mean?255:0;if(invert)v=255-v;
+        d[i]=d[i+1]=d[i+2]=v;
+      }
+      cx2.putImageData(id,0,0);
+    }
     try{
       while(run){
         const w=vid.videoWidth,h=vid.videoHeight;if(!w){await sleep(300);continue}
-        c.width=w*.72;c.height=h*.2;cx.drawImage(vid,w*.14,h*.4,w*.72,h*.2,0,0,c.width,c.height);
+        c.width=w*.8;c.height=h*.26;cx.drawImage(vid,w*.1,h*.37,w*.8,h*.26,0,0,c.width,c.height);
+        bw(c);
         const r=await worker.recognize(c);if(!run)break;
         // O odómetro parcial mostra casas decimais (ex.: 512.3); o total é sempre um número inteiro.
         // Ignoramos qualquer número com ponto decimal, para não confundir os dois.
