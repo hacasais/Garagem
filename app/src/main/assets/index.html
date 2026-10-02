@@ -315,17 +315,19 @@ function editKm(){
   <div id="kmmsg" class="mut" style="margin-top:6px;min-height:18px"></div>
   <label style="margin-top:10px">Quilómetros atuais</label><input name="km" type="number" inputmode="numeric" min="0" required value="${v.km||""}">
   <div class="acts"><button type="button" class="btn ghost" data-close>Cancelar</button><button class="btn">Guardar</button></div>`,
-  f=>{const n=Number(f.get("km"))||0;if(n<(v.km||0)&&!confirm("O valor é inferior ao atual. Guardar mesmo assim?"))return;v.km=n});
+  f=>{stop();const n=Number(f.get("km"))||0;if(n<(v.km||0)&&!confirm("O valor é inferior ao atual. Guardar mesmo assim?"))return;v.km=n});
   const $d=s=>d.querySelector(s),cam=$d("#kmcam"),box=$d("#kmbox"),vid=$d("#kmvid"),m=$d("#kmmsg"),inp=$d("[name=km]"),use=$d("#kmuse");
   let stream=null,worker=null,run=false;
   const stop=()=>{run=false;if(stream)stream.getTracks().forEach(t=>t.stop());stream=null;if(worker)worker.terminate().catch(()=>{});worker=null;box.style.display="none";cam.style.display=""};
   $d("#kmstop").onclick=stop;
+  d.querySelectorAll("[data-close]").forEach(b=>b.addEventListener("click",stop));
+  d.addEventListener("click",e=>{if(e.target===d)stop()});
   use.onclick=()=>{inp.value=use.dataset.v;stop();m.textContent="Valor "+fmtKm(Number(inp.value))+" preenchido. Confirma ou corrige e carrega em Guardar."};
   cam.onclick=async()=>{
     try{stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:"environment"},width:{ideal:1280}},audio:false})}
     catch(e){m.textContent="Não consegui abrir a câmara. Autoriza o acesso à câmara ou escreve o valor manualmente.";return}
     vid.srcObject=stream;box.style.display="block";cam.style.display="none";run=true;use.disabled=true;
-    const iv=setInterval(()=>{if(!document.body.contains(d)){stop();clearInterval(iv)}},500);
+    const iv=setInterval(()=>{if(!document.body.contains(d)){stop();clearInterval(iv)}},150);
     m.textContent="A preparar a leitura… (precisa de internet)";
     try{
       if(!window.Tesseract)await new Promise((ok,ko)=>{const s=document.createElement("script");s.src="https://cdnjs.cloudflare.com/ajax/libs/tesseract.js/5.1.1/tesseract.min.js";s.onload=ok;s.onerror=ko;document.head.appendChild(s)});
