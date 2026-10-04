@@ -176,7 +176,6 @@ function render(){
   if(LOAD==="loading"){$("#app").innerHTML=`<div class="empty">A carregar a tua garagem…</div>`;return}
   if(LOAD==="off"){$("#app").innerHTML=`<div class="empty">Este browser não permite guardar dados locais.<br>Abre o ficheiro com o Chrome (Android) ou o Safari (iPhone), fora do modo privado.</div>`;return}
   save();
-  if(S.view==="reports"){$("#app").innerHTML=reportsView();return}
   const v=cur();
   $("#app").innerHTML=v?vehicleView(v):listView();
 }
@@ -186,7 +185,7 @@ const near=(a,v)=>{const i=alertInfo(a,v);return((i.days!==null&&i.days<=60)||(i
 const openV=id=>{S.sel=id;S.tab="resumo";render()};
 function listView(){
   const n=S.vehicles.reduce((s,v)=>s+allAlerts(v).filter(a=>near(a,v)).length,0);
-  return `<div class="top"><h1><span class="brand">RT</span>RLTecAuto</h1><div style="display:flex;gap:6px"><button class="btn ghost sm" onclick="S.view='reports';render()">Relatórios</button><button class="btn ghost sm" onclick="backup()">Cópia</button></div></div>
+  return `<div class="top"><h1><span class="brand">RT</span>RLTecAuto</h1><button class="btn ghost sm" onclick="backup()">Cópia</button></div>
   ${bkNote()}
   ${n?`<p class="mut" style="margin:0 0 12px">${n} aviso${n>1?"s":""} nos próximos 2 meses (ou a menos de 2 000 km)</p>`:""}
   ${S.vehicles.length?S.vehicles.map(vcard).join(""):`<div class="empty">Ainda não tens nenhum ativo.<br>Adiciona o primeiro para começar a registar.</div>`}
@@ -201,10 +200,10 @@ function vcard(v){
 }
 const plate=p=>`<span class="plate" style="margin-top:6px"><i>P</i><b>${esc(p.toUpperCase())}</b></span>`;
 function vehicleView(v){
-  const tabs=[["resumo","Resumo"],["registos","Registos"],["avisos","Avisos"],["tecnico","Técnico"]];
+  const tabs=[["resumo","Resumo"],["registos","Registos"],["avisos","Avisos"],["tecnico","Técnico"],["relatorios","Relatórios"]];
   let body="";
-  if(S.tab==="resumo")body=resumo(v);else if(S.tab==="registos")body=registos(v);else if(S.tab==="avisos")body=avisos(v);else body=tecnico(v);
-  const fab=S.tab==="avisos"?`<button class="btn fab" onclick="editAlert()">+ Aviso</button>`:S.tab==="tecnico"?`<button class="btn fab" onclick="editTech()">+ Detalhe</button>`:`<button class="btn fab" onclick="editRec()">+ Registo</button>`;
+  if(S.tab==="resumo")body=resumo(v);else if(S.tab==="registos")body=registos(v);else if(S.tab==="avisos")body=avisos(v);else if(S.tab==="tecnico")body=tecnico(v);else body=relatorios(v);
+  const fab=S.tab==="avisos"?`<button class="btn fab" onclick="editAlert()">+ Aviso</button>`:S.tab==="tecnico"?`<button class="btn fab" onclick="editTech()">+ Detalhe</button>`:S.tab==="relatorios"?"":`<button class="btn fab" onclick="editRec()">+ Registo</button>`;
   return `<div class="top"><button class="btn ghost sm" onclick="S.sel=null;render()">‹ Ativos</button><button class="btn ghost sm" onclick="editVeh('${v.id}')">Editar</button></div>
   <div class="hero">${thumb(v)}<div><h1 style="font-size:26px">${esc(v.name)}</h1>${unitOf(v)!=="none"?`<div class="num">${(Number(v.km)||0).toLocaleString("pt-PT")} <span style="font-size:20px">${UNIT_SUFFIX[unitOf(v)].trim()}</span></div>`:""}${v.plate?plate(v.plate):""}</div></div>
   <div class="tabs" role="tablist">${tabs.map(t=>`<button role="tab" aria-selected="${S.tab===t[0]}" onclick="S.tab='${t[0]}';render()">${t[1]}</button>`).join("")}</div>${body}${fab}`;
@@ -238,7 +237,7 @@ function registos(v){
 function alertCard(a,i,u){
   u=u||"km";
   const c=["ok","warn","bad"][i.lvl];
-  return `<div class="card"><div class="row"><div><strong>${esc(a.title)}</strong><div class="mut">${a.date?"Data: "+fmtD(a.date):""}${a.date&&a.km?" · ":""}${a.km?"Aos "+fmtCounterN(a.km,u):""}</div></div><span class="tag ${c}">${i.txt}</span></div>
+  return `<div class="card"><div class="row"><div><strong>${esc(a.title)}</strong><div class="mut">${a.date?"Data: "+fmtD(a.date):""}${a.date&&a.km?" · ":""}${a.km?"Aos "+fmtCounterN(a.km,u):""}</div>${a.note?`<div class="mut" style="margin-top:3px">💡 ${esc(a.note)}</div>`:""}</div><span class="tag ${c}">${i.txt}</span></div>
   <div class="acts" style="margin-top:10px"><button class="btn sm" onclick="doneAlert('${a.id}')">Concluir</button><button class="btn ghost sm" onclick="${a.derived?`editPlan('${a.planId}')`:`editAlert('${a.id}')`}">Editar</button></div></div>`;
 }
 function avisos(v){
@@ -387,20 +386,25 @@ function editRec(id,pre){
   ${id?`<div class="acts"><button type="button" class="btn del" onclick="delRec('${id}')">Apagar registo</button></div>`:""}`,
   async(f,form)=>{const ph=await files(form,"ph");const o=id?x:{id:uid(),photos:[]};
     Object.assign(o,{type:(f.get("type")||"").trim(),date:f.get("date"),km:Number(f.get("km"))||0,cost:Number(f.get("cost"))||0,brand:(f.get("brand")||"").trim(),notes:f.get("notes")});o.photos=[...(o.photos||[]),...ph];
-    if(!id){v.records.push(o);if(pre?.fromAlert)v.alerts=v.alerts.filter(a=>a.id!==pre.fromAlert)}
+    if(!id){
+      v.records.push(o);
+      if(pre?.fromAlert)v.alerts=v.alerts.filter(a=>a.id!==pre.fromAlert);
+      if(pre?.clearPlanNote){const pl=(v.plan||[]).find(x=>x.id===pre.clearPlanNote);if(pl)pl.note=""}
+    }
     if(o.km>(v.km||0))v.km=o.km;S.tab="registos"});
 }
 function delRec(id){if(confirm("Apagar este registo?")){const v=cur();v.records=v.records.filter(r=>r.id!==id);document.querySelector(".sheet")?.remove();render()}}
 function editAlert(id){
-  const v=cur(),a=(v.alerts||[]).find(x=>x.id===id)||{};
+  const v=cur(),a=(v.alerts||[]).find(x=>x.id===id)||{},u=unitOf(v),hasCounter=u!=="none";
   sheet(`<h2>${id?"Editar aviso":"Novo aviso"}</h2>
   <label>O que tens de fazer?</label><input name="title" required placeholder="Ex.: Inspeção, mudança de óleo" value="${esc(a.title)}">
-  <div class="g2"><div><label>Até à data</label><input name="date" type="date" value="${a.date||""}"></div><div><label>Aos km</label><input name="km" type="number" inputmode="numeric" placeholder="${(Number(v.km)||0)+10000}" value="${a.km??""}"></div></div>
-  <p class="mut">Preenche a data, os km ou ambos. O aviso dispara com o que chegar primeiro.</p>
+  <div class="g2"><div><label>Até à data</label><input name="date" type="date" value="${a.date||""}"></div>${hasCounter?`<div><label>Aos ${u==="horas"?"horas":"km"}</label><input name="km" type="number" inputmode="numeric" placeholder="${(Number(v.km)||0)+(u==="horas"?250:10000)}" value="${a.km??""}"></div>`:""}</div>
+  <p class="mut">${hasCounter?`Preenche a data, o contador ou ambos. O aviso dispara com o que chegar primeiro.`:`Define a data deste aviso.`}</p>
+  <label>Lembrete (opcional)</label><input name="note" placeholder="Ex.: levar o livrete" value="${esc(a.note||"")}">
   <div class="acts"><button type="button" class="btn ghost" data-close>Cancelar</button><button class="btn">Guardar</button></div>
   ${id?`<div class="acts"><button type="button" class="btn del" onclick="delAlert('${id}')">Apagar aviso</button></div>`:""}`,
-  f=>{if(!f.get("date")&&!f.get("km")){alert("Indica uma data ou uma quilometragem.");return}
-    const o=id?a:{id:uid()};Object.assign(o,{title:f.get("title"),date:f.get("date"),km:Number(f.get("km"))||0});if(!id)v.alerts.push(o);S.tab="avisos"});
+  f=>{if(!f.get("date")&&!f.get("km")){alert(hasCounter?"Indica uma data ou um valor do contador.":"Indica uma data.");return}
+    const o=id?a:{id:uid()};Object.assign(o,{title:f.get("title"),date:f.get("date"),km:Number(f.get("km"))||0,note:(f.get("note")||"").trim()});if(!id)v.alerts.push(o);S.tab="avisos"});
 }
 function delAlert(id){const v=cur();v.alerts=v.alerts.filter(a=>a.id!==id);document.querySelector(".sheet")?.remove();render()}
 function techFieldList(cat){
@@ -457,7 +461,14 @@ function editTech(id){
     if(!id)v.tech.push(o);});
 }
 function delTech(id){const v=cur();v.tech=(v.tech||[]).filter(t=>t.id!==id);document.querySelector(".sheet")?.remove();render()}
-function doneAlert(id){const v=cur();if(id.startsWith('plan:')){const p=v.plan.find(x=>x.id===id.slice(5));editRec(null,{type:p.type});return}const a=v.alerts.find(x=>x.id===id);editRec(null,{type:TYPES.includes(a.title)?a.title:"Outro",notes:TYPES.includes(a.title)?"":a.title,fromAlert:id})}
+function doneAlert(id){
+  const v=cur();
+  if(id.startsWith('plan:')){const p=v.plan.find(x=>x.id===id.slice(5));editRec(null,{type:p.type,notes:p.note||"",clearPlanNote:p.id});return}
+  const a=v.alerts.find(x=>x.id===id);
+  const base=TYPES.includes(a.title)?"":a.title;
+  const notes=[base,a.note].filter(Boolean).join(base&&a.note?" — ":"");
+  editRec(null,{type:TYPES.includes(a.title)?a.title:"Outro",notes,fromAlert:id});
+}
 const mkPlan=tuples=>tuples.map(([type,km,months])=>({id:uid(),type,km,months}));
 const defPlan=()=>mkPlan([["Revisão",15000,12],["Óleo e filtros",15000,12],["Rotação de pneus",10000,0],["Travões",30000,24],["Inspeção (IPO)",0,24],["Seguro",0,12]]);
 const ASSET_TYPES_BUILTIN=[
@@ -521,7 +532,7 @@ function planAlerts(v){
     if(r&&(!ld||r.date>=ld)){ld=r.date;lk=Number(r.km)||0}
     let date="";if(Number(p.months)&&ld){const d=new Date(ld+"T12:00");d.setMonth(d.getMonth()+Number(p.months));date=d.toISOString().slice(0,10)}
     const km=Number(p.km)&&lk?lk+Number(p.km):0;
-    return{id:"plan:"+p.id,title:p.type,derived:true,planId:p.id,date,km,none:!date&&!km};
+    return{id:"plan:"+p.id,title:p.type,derived:true,planId:p.id,date,km,note:p.note||"",none:!date&&!km};
   });
 }
 const allAlerts=v=>[...(v.alerts||[]),...planAlerts(v).filter(a=>!a.none)];
@@ -536,11 +547,11 @@ function allTypes(){
   S.vehicles.forEach(v=>{(v.plan||[]).forEach(p=>extra.push(p.type));(v.records||[]).forEach(r=>extra.push(r.type))});
   const out=[...baseTypes()];extra.forEach(t=>{if(t&&!out.includes(t))out.push(t)});return out;
 }
-// --- Relatórios ---
-// Estima os km percorridos por ano a partir dos pontos conhecidos (registos com km + o valor atual),
-// distribuindo proporcionalmente os km percorridos entre duas leituras pelos dias de cada ano civil.
+// --- Relatórios (por ativo) ---
+// Estima o contador percorrido por ano a partir dos pontos conhecidos (registos + valor atual),
+// distribuindo proporcionalmente entre duas leituras pelos dias de cada ano civil.
 function annualKm(v){
-  if(unitOf(v)!=="km")return null;
+  if(unitOf(v)==="none")return null;
   const byDate={};
   (v.records||[]).forEach(r=>{if(Number(r.km)>0&&r.date){if(!byDate[r.date]||r.km>byDate[r.date])byDate[r.date]=Number(r.km)}});
   byDate[today()]=Math.max(byDate[today()]||0,Number(v.km)||0);
@@ -561,7 +572,7 @@ function annualKm(v){
   Object.keys(years).forEach(y=>years[y]=Math.round(years[y]));
   const totalKm=arr[arr.length-1].k-arr[0].k;
   const totalDays=Math.max(1,(new Date(arr[arr.length-1].d+"T12:00")-new Date(arr[0].d+"T12:00"))/864e5);
-  return{years,avgPerYear:Math.round(totalKm/(totalDays/365)),totalKm,totalDays,from:arr[0].d,to:arr[arr.length-1].d};
+  return{years,avgPerYear:Math.round(totalKm/(totalDays/365)),totalKm,totalDays};
 }
 function costStats(v){
   const total=(v.records||[]).reduce((s,r)=>s+(Number(r.cost)||0),0);
@@ -571,22 +582,19 @@ function costStats(v){
   const ann=annualKm(v);
   return{total,avgYear:total/nYears,perKm:ann&&ann.totalKm>0?total/ann.totalKm:null,byYear};
 }
-// Duração entre substituições sucessivas do mesmo tipo, por viatura, agrupadas por tipo+marca/modelo.
-function partLifespans(){
-  const rows=[];
-  S.vehicles.forEach(v=>{
-    const byType={};
-    (v.records||[]).forEach(r=>{if(r.type&&r.date)(byType[r.type]=byType[r.type]||[]).push(r)});
-    Object.values(byType).forEach(list=>{
-      const sorted=[...list].sort((a,b)=>a.date.localeCompare(b.date)||(a.km||0)-(b.km||0));
-      for(let i=1;i<sorted.length;i++){
-        const a=sorted[i-1],b=sorted[i];
-        const days=Math.round((new Date(b.date+"T12:00")-new Date(a.date+"T12:00"))/864e5);
-        if(days<=0)continue;
-        const km=Number(b.km)>0&&Number(a.km)>0?Number(b.km)-Number(a.km):null;
-        rows.push({vehicle:v.name,type:b.type,brand:(b.brand||"").trim(),km:km>0?km:null,days});
-      }
-    });
+// Duração entre substituições sucessivas do mesmo tipo, dentro deste ativo, agrupadas por tipo+marca/modelo.
+function partLifespans(v){
+  const rows=[],byType={};
+  (v.records||[]).forEach(r=>{if(r.type&&r.date)(byType[r.type]=byType[r.type]||[]).push(r)});
+  Object.values(byType).forEach(list=>{
+    const sorted=[...list].sort((a,b)=>a.date.localeCompare(b.date)||(a.km||0)-(b.km||0));
+    for(let i=1;i<sorted.length;i++){
+      const a=sorted[i-1],b=sorted[i];
+      const days=Math.round((new Date(b.date+"T12:00")-new Date(a.date+"T12:00"))/864e5);
+      if(days<=0)continue;
+      const km=Number(b.km)>0&&Number(a.km)>0?Number(b.km)-Number(a.km):null;
+      rows.push({type:b.type,brand:(b.brand||"").trim(),km:km>0?km:null,days});
+    }
   });
   return rows;
 }
@@ -601,35 +609,41 @@ function groupLifespans(rows){
   }).sort((a,b)=>a.type.localeCompare(b.type,"pt")||(b.avgKm||0)-(a.avgKm||0));
 }
 function fmtDays(d){if(d>=365)return(d/365).toFixed(1).replace(".0","")+" anos";if(d>=60)return Math.round(d/30)+" meses";return d+" dias"}
-function reportsView(){
-  const vs=S.vehicles;
-  const kmVs=vs.filter(v=>unitOf(v)==="km");
-  const ann=kmVs.map(v=>({v,r:annualKm(v)})).filter(x=>x.r);
-  const totKm=ann.reduce((s,x)=>s+x.r.totalKm,0),totDaysY=ann.reduce((s,x)=>s+x.r.totalDays/365,0);
-  const overallAvg=totDaysY>0?Math.round(totKm/totDaysY):null;
-  const groups=groupLifespans(partLifespans()).filter(g=>g.n>=1);
-  const grandTotal=vs.reduce((s,v)=>s+(v.records||[]).reduce((s2,r)=>s2+(Number(r.cost)||0),0),0);
+function bar(label,value,max,valueText,color){
+  const pct=max>0?Math.max(4,Math.round(value/max*100)):0;
+  return `<div style="margin-bottom:8px"><div class="row" style="margin-bottom:3px"><span style="font-size:13px;font-weight:600">${esc(label)}</span><span class="num" style="font-size:13px">${valueText}</span></div>
+  <div style="background:var(--line);border-radius:2px;height:8px;overflow:hidden"><div style="width:${pct}%;height:100%;background:${color||"var(--pri)"}"></div></div></div>`;
+}
+function relatorios(v){
+  const u=unitOf(v),suf=UNIT_SUFFIX[u]?UNIT_SUFFIX[u].trim():"";
+  const ann=annualKm(v);
+  const c=costStats(v);
+  const groups=groupLifespans(partLifespans(v));
 
-  return `<div class="top"><button class="btn ghost sm" onclick="S.view=null;render()">‹ Ativos</button></div>
-  <h1 style="font-size:24px;margin-bottom:12px">Relatórios</h1>
+  const stats=[];
+  if(ann)stats.push([ann.avgPerYear.toLocaleString("pt-PT")+" "+suf+"/ano","Média anual"]);
+  stats.push([fmtEur(c.total),"Gasto total"]);
+  stats.push([fmtEur(c.avgYear),"Gasto / ano"]);
+  if(c.perKm)stats.push([c.perKm.toLocaleString("pt-PT",{style:"currency",currency:"EUR",minimumFractionDigits:3})+"/"+suf,"Custo por "+suf]);
 
-  ${kmVs.length?`<h3 style="margin:0 0 8px">Km por ano</h3>
-  ${overallAvg?`<div class="hero" style="margin-bottom:10px"><div><div class="mut" style="color:inherit;opacity:.85">Média anual — todas as viaturas</div><div class="num" style="font-size:36px">${overallAvg.toLocaleString("pt-PT")} <span style="font-size:18px">km/ano</span></div></div></div>`:""}
-  ${ann.map(x=>`<div class="card"><div class="row"><strong>${esc(x.v.name)}</strong><span class="num" style="font-size:18px">${x.r.avgPerYear.toLocaleString("pt-PT")} km/ano</span></div>
-    <div class="mut" style="margin-top:4px">${Object.entries(x.r.years).sort((a,b)=>a[0]-b[0]).map(([y,k])=>y+": "+Number(k).toLocaleString("pt-PT")+" km").join(" · ")}</div></div>`).join("")}
-  `:`<div class="empty">Sem viaturas com km para calcular médias anuais.</div>`}
+  const years=ann?Object.entries(ann.years).sort((a,b)=>a[0]-b[0]):[];
+  const maxY=years.length?Math.max(...years.map(y=>y[1])):0;
+  const costYears=Object.entries(c.byYear).sort((a,b)=>a[0]-b[0]);
+  const maxC=costYears.length?Math.max(...costYears.map(y=>y[1])):0;
 
-  <h3 style="margin:18px 0 8px">Duração entre substituições</h3>
-  <p class="mut" style="margin-top:0">Calculado a partir de registos sucessivos do mesmo tipo. Preenche "Marca/modelo" nos registos (por exemplo de pneus ou travões) para comparares qual dura mais.</p>
+  return `
+  <div class="stats">${stats.map(([n,l])=>`<div class="stat"><div class="mut">${l}</div><div class="num" style="font-size:22px">${n}</div></div>`).join("")}</div>
+
+  ${years.length?`<h3 style="margin:16px 0 8px">${UNIT_NAME[u]} por ano</h3><div class="card">${years.map(([y,k])=>bar(y,k,maxY,Number(k).toLocaleString("pt-PT")+" "+suf)).join("")}</div>`:""}
+
+  ${costYears.length>1?`<h3 style="margin:16px 0 8px">Gasto por ano</h3><div class="card">${costYears.map(([y,k])=>bar(y,k,maxC,fmtEur(k),"var(--warn)")).join("")}</div>`:""}
+
+  <h3 style="margin:16px 0 8px">Duração entre substituições</h3>
+  <p class="mut" style="margin-top:0">Calculado entre registos sucessivos do mesmo tipo. Preenche "Marca/modelo" num registo (pneus, travões…) para comparares qual dura mais.</p>
   ${groups.length?groups.map(g=>`<div class="card"><div class="row"><strong>${esc(g.type)}</strong><span class="mut">${g.n} troca${g.n>1?"s":""}</span></div>
     <div class="mut" style="margin-top:2px">${g.brand!=="—"?esc(g.brand):"Sem marca/modelo registado"}</div>
-    <div style="margin-top:6px">${g.avgKm?`<span class="num" style="font-size:18px">${g.avgKm.toLocaleString("pt-PT")} km</span> · `:""}<span class="num" style="font-size:18px">${fmtDays(g.avgDays)}</span></div></div>`).join("")
+    <div style="margin-top:6px;display:flex;gap:14px">${g.avgKm?`<span class="num" style="font-size:17px">${g.avgKm.toLocaleString("pt-PT")} km</span>`:""}<span class="num" style="font-size:17px">${fmtDays(g.avgDays)}</span></div></div>`).join("")
   :`<div class="empty">Ainda não há duas ocorrências do mesmo tipo de registo para calcular durações.</div>`}
-
-  <h3 style="margin:18px 0 8px">Custos</h3>
-  <div class="hero" style="margin-bottom:10px"><div><div class="mut" style="color:inherit;opacity:.85">Gasto total — todos os ativos</div><div class="num" style="font-size:32px">${fmtEur(grandTotal)}</div></div></div>
-  ${vs.map(v=>{const c=costStats(v);return `<div class="card"><div class="row"><strong>${esc(v.name)}</strong><span class="num" style="font-size:16px">${fmtEur(c.total)}</span></div>
-    <div class="mut" style="margin-top:4px">${fmtEur(c.avgYear)}/ano${c.perKm?" · "+(c.perKm).toLocaleString("pt-PT",{style:"currency",currency:"EUR",minimumFractionDigits:3})+"/km":""}</div></div>`}).join("")}
   `;
 }
 function manageTypes(){
@@ -679,13 +693,15 @@ function editPlan(id){
   </div>
   ${hasCounter?`<p class="mut">Com "Ambos", o aviso dispara com o que chegar primeiro.</p>`:""}
   <label>Última vez (só se ainda não tens registo)</label><div class="g2"><input name="lastDate" type="date" value="${p.lastDate||""}">${hasCounter?`<input name="lastKm" type="number" inputmode="numeric" placeholder="${u==="horas"?"horas":"km"}" value="${p.lastKm||""}">`:""}</div>
+  <label>Lembrete para a próxima vez (opcional)</label><input name="note" placeholder="Ex.: rever nível das pastilhas de travão" value="${esc(p.note||"")}">
+  <p class="mut">Só vale para a próxima vez: aparece junto deste aviso, passa para as notas do registo quando tocares em «Concluir», e depois limpa-se sozinho — não se repete nas vezes seguintes.</p>
   <div class="acts"><button type="button" class="btn ghost" onclick="planSheet()">Cancelar</button><button class="btn">Guardar</button></div>
   ${id?`<div class="acts"><button type="button" class="btn del" onclick="delPlan('${id}')">Apagar intervenção</button></div>`:""}`,
   f=>{const mode=hasCounter?f.get("mode"):"meses",name=(f.get("type")||"").trim();if(!name)return;
     const km=hasCounter&&mode!=="meses"?Number(f.get("km"))||0:0,months=mode!=="km"?Number(f.get("months"))||0:0;
     if(!km&&!months){alert("Indica "+(hasCounter?(u==="horas"?"horas, meses ou ambos.":"km, meses ou ambos."):"os meses.")); setTimeout(()=>editPlan(id),50);return}
     const o=id?p:{id:uid()};
-    Object.assign(o,{type:name,km,months,lastDate:f.get("lastDate"),lastKm:Number(f.get("lastKm"))||0});
+    Object.assign(o,{type:name,km,months,lastDate:f.get("lastDate"),lastKm:Number(f.get("lastKm"))||0,note:(f.get("note")||"").trim()});
     if(!id){v.plan=v.plan||defPlan();v.plan.push(o)}setTimeout(planSheet,50)});
 }
 function delPlan(id){const v=cur();v.plan=v.plan.filter(p=>p.id!==id);render();planSheet()}
