@@ -228,11 +228,18 @@ function registos(v){
     ${types.map(t=>`<option value="${esc(t)}"${t===filt?" selected":""}>${esc(t)}</option>`).join("")}
   </select>`;
   const r=(filt?all.filter(x=>x.type===filt):all).sort((a,b)=>b.date.localeCompare(a.date)||b.km-a.km);
-  return sel+(r.length?r.map(x=>`<div class="card"><div class="row"><div><strong>${esc(x.type)}</strong><div class="mut">${fmtD(x.date)}${x.km?" · "+fmtCounterN(x.km,unitOf(v)):""}</div></div><div class="num" style="font-size:22px">${x.cost?fmtEur(x.cost):""}</div></div>
-  ${x.brand?`<div class="mut" style="margin-top:4px">${esc(x.brand)}</div>`:""}
-  ${x.notes?`<p style="margin:8px 0 0">${esc(x.notes)}</p>`:""}
-  ${(x.photos||[]).length?`<div class="photos">${x.photos.map((p,i)=>`<img src="${src(p)}" alt="Fotografia ${i+1}" onclick="zoom(this.src)">`).join("")}</div>`:""}
-  <div class="acts" style="margin-top:10px"><button class="btn ghost sm" onclick="editRec('${x.id}')">Editar</button></div></div>`).join(""):`<div class="empty">Sem registos deste componente.</div>`);
+  if(!r.length)return sel+`<div class="empty">Sem registos deste componente.</div>`;
+  const byYear={};r.forEach(x=>{const y=(x.date||"").slice(0,4)||"—";(byYear[y]=byYear[y]||[]).push(x)});
+  const years=Object.keys(byYear).sort((a,b)=>b.localeCompare(a));
+  const card=x=>`<div class="card">
+    <div class="row">
+      <div><div style="font-weight:700;font-size:15px">${fmtD(x.date)}</div><div class="mut" style="margin-top:2px">${esc(x.type)}${x.brand?` · ${esc(x.brand)}`:""}</div></div>
+      <div style="text-align:right">${x.km?`<div class="num" style="font-size:15px">${fmtCounterN(x.km,unitOf(v))}</div>`:""}${x.cost?`<div class="mut">${fmtEur(x.cost)}</div>`:""}</div>
+    </div>
+    ${x.notes?`<p style="margin:8px 0 0;font-size:14px">${esc(x.notes)}</p>`:""}
+    ${(x.photos||[]).length?`<div class="photos">${x.photos.map((p,i)=>`<img src="${src(p)}" alt="Fotografia ${i+1}" onclick="zoom(this.src)">`).join("")}</div>`:""}
+    <div class="acts" style="margin-top:10px"><button class="btn ghost sm" onclick="editRec('${x.id}')">Editar</button></div></div>`;
+  return sel+years.map(y=>`<h3 style="margin:14px 0 6px;color:var(--mut);font-size:14px">${y}</h3>`+byYear[y].map(card).join("")).join("");
 }
 function alertCard(a,i,u){
   u=u||"km";
@@ -378,7 +385,10 @@ function editRec(id,pre){
   <input name="type" required list="rectypelist" placeholder="Escolhe ou escreve um tipo novo" value="${esc(x.type||"")}">
   <datalist id="rectypelist">${allTypes().map(t=>`<option value="${esc(t)}">`).join("")}</datalist>
   <div class="g2"><div><label>Data</label><input name="date" type="date" required value="${x.date||today()}"></div>${unitOf(v)!=="none"?`<div><label>${UNIT_NAME[unitOf(v)]}</label><input name="km" type="number" inputmode="numeric" value="${x.km??v.km??""}"></div>`:""}</div>
-  <div class="g2"><div><label>Custo (€)</label><input name="cost" type="number" step="0.01" inputmode="decimal" value="${x.cost??""}"></div><div><label>Marca / modelo (opcional)</label><input name="brand" placeholder="Ex.: Michelin CrossClimate 2" value="${esc(x.brand||"")}"></div></div>
+  <div class="g2"><div><label>Custo (€)</label><input name="cost" type="number" step="0.01" inputmode="decimal" value="${x.cost??""}"></div>
+  <div><div class="row" style="align-items:baseline"><label style="margin:0">Marca / modelo</label><button type="button" class="btn ghost sm" style="padding:2px 8px;min-height:0;font-size:12px" onclick="manageBrands()">Gerir</button></div>
+  <input name="brand" list="brandlist" placeholder="Ex.: Michelin CrossClimate 2" value="${esc(x.brand||"")}"></div></div>
+  <datalist id="brandlist">${allBrands().map(t=>`<option value="${esc(t)}">`).join("")}</datalist>
   <label>Notas (oficina, peças, referências…)</label><textarea name="notes" rows="3">${esc(x.notes)}</textarea>
   ${ASSETS?`<label>Fotografias (recibos, peças, danos)</label><input name="ph" type="file" accept="image/*" multiple>`:""}
   ${(x.photos||[]).length?`<div class="mut" style="margin-top:6px">${x.photos.length} fotografia(s) já guardada(s); novas serão adicionadas.</div>`:""}
@@ -390,6 +400,8 @@ function editRec(id,pre){
       v.records.push(o);
       if(pre?.fromAlert)v.alerts=v.alerts.filter(a=>a.id!==pre.fromAlert);
       if(pre?.clearPlanNote){const pl=(v.plan||[]).find(x=>x.id===pre.clearPlanNote);if(pl)pl.note=""}
+      if(confirm('Registo guardado. Queres aproveitar a mesma data'+(unitOf(v)!=="none"?"/"+(unitOf(v)==="horas"?"horas":"km"):"")+' para registar outra tarefa feita ao mesmo tempo (ex.: óleo de travões)?'))
+        setTimeout(()=>editRec(null,{date:o.date,km:o.km}),50);
     }
     if(o.km>(v.km||0))v.km=o.km;S.tab="registos"});
 }
@@ -413,7 +425,7 @@ function techFieldList(cat){
   const custom=(meta.techCustom&&meta.techCustom[cat])||[];
   const out=base.filter(t=>!removed.includes(t));
   custom.forEach(t=>{if(t&&!out.includes(t))out.push(t)});
-  return out;
+  return out.sort((a,b)=>a.localeCompare(b,"pt"));
 }
 function techCatChange(val){const el=document.getElementById("techlist");if(el)el.innerHTML=techFieldList(val).map(t=>`<option value="${esc(t)}">`).join("")}
 function manageTechFields(cat){
@@ -540,12 +552,12 @@ function baseTypes(){
   const removed=meta.typesRemoved||[],custom=meta.typesCustom||[];
   const out=TYPES.filter(t=>!removed.includes(t));
   custom.forEach(t=>{if(t&&!out.includes(t))out.push(t)});
-  return out;
+  return out.sort((a,b)=>a.localeCompare(b,"pt"));
 }
 function allTypes(){
   const extra=[];
   S.vehicles.forEach(v=>{(v.plan||[]).forEach(p=>extra.push(p.type));(v.records||[]).forEach(r=>extra.push(r.type))});
-  const out=[...baseTypes()];extra.forEach(t=>{if(t&&!out.includes(t))out.push(t)});return out;
+  const out=[...baseTypes()];extra.forEach(t=>{if(t&&!out.includes(t))out.push(t)});return out.sort((a,b)=>a.localeCompare(b,"pt"));
 }
 // --- Relatórios (por ativo) ---
 // Estima o contador percorrido por ano a partir dos pontos conhecidos (registos + valor atual),
@@ -584,6 +596,8 @@ function costStats(v){
 }
 // Duração entre substituições sucessivas do mesmo tipo, dentro deste ativo, agrupadas por tipo+marca/modelo.
 function partLifespans(v){
+  // Um intervalo entre duas substituições seguidas mede quanto durou a PEÇA ANTERIOR (a),
+  // não a que acabou de entrar (b) — essa ainda não tem substituição a seguir, logo não conta ainda.
   const rows=[],byType={};
   (v.records||[]).forEach(r=>{if(r.type&&r.date)(byType[r.type]=byType[r.type]||[]).push(r)});
   Object.values(byType).forEach(list=>{
@@ -593,7 +607,7 @@ function partLifespans(v){
       const days=Math.round((new Date(b.date+"T12:00")-new Date(a.date+"T12:00"))/864e5);
       if(days<=0)continue;
       const km=Number(b.km)>0&&Number(a.km)>0?Number(b.km)-Number(a.km):null;
-      rows.push({type:b.type,brand:(b.brand||"").trim(),km:km>0?km:null,days});
+      rows.push({type:a.type,brand:(a.brand||"").trim(),km:km>0?km:null,days,from:a.date,to:b.date});
     }
   });
   return rows;
@@ -603,10 +617,20 @@ function groupLifespans(rows){
   rows.forEach(r=>{(g[r.type+"||"+(r.brand||"—")]=g[r.type+"||"+(r.brand||"—")]||[]).push(r)});
   return Object.entries(g).map(([key,list])=>{
     const[type,brand]=key.split("||"),kms=list.filter(x=>x.km!=null).map(x=>x.km);
-    return{type,brand,n:list.length,
+    return{type,brand,n:list.length,rows:list,
       avgKm:kms.length?Math.round(kms.reduce((s,x)=>s+x,0)/kms.length):null,
       avgDays:Math.round(list.reduce((s,x)=>s+x.days,0)/list.length)};
   }).sort((a,b)=>a.type.localeCompare(b.type,"pt")||(b.avgKm||0)-(a.avgKm||0));
+}
+function lifespanDetail(vId,idx){
+  document.querySelectorAll(".sheet").forEach(s=>s.remove());
+  const v=S.vehicles.find(x=>x.id===vId);if(!v)return;
+  const groups=groupLifespans(partLifespans(v));
+  const g=groups[idx];if(!g)return;
+  const u=unitOf(v);
+  sheet(`<h2 style="font-size:19px">${esc(type)}</h2><p class="mut" style="margin-top:-6px">${g.brand!=="—"?esc(g.brand):"Sem marca/modelo registado"}</p>
+  ${g.rows.map(r=>`<div class="card"><div class="row"><span>${fmtD(r.from)} → ${fmtD(r.to)}</span><span class="num" style="font-size:15px">${fmtDays(r.days)}</span></div>${r.km?`<div class="mut" style="margin-top:3px">${fmtCounterN(r.km,u)}</div>`:""}</div>`).join("")}
+  <div class="acts"><button type="button" class="btn ghost" data-close>Fechar</button></div>`,()=>{});
 }
 function fmtDays(d){if(d>=365)return(d/365).toFixed(1).replace(".0","")+" anos";if(d>=60)return Math.round(d/30)+" meses";return d+" dias"}
 function bar(label,value,max,valueText,color){
@@ -640,11 +664,43 @@ function relatorios(v){
 
   <h3 style="margin:16px 0 8px">Duração entre substituições</h3>
   <p class="mut" style="margin-top:0">Calculado entre registos sucessivos do mesmo tipo. Preenche "Marca/modelo" num registo (pneus, travões…) para comparares qual dura mais.</p>
-  ${groups.length?groups.map(g=>`<div class="card"><div class="row"><strong>${esc(g.type)}</strong><span class="mut">${g.n} troca${g.n>1?"s":""}</span></div>
+  ${groups.length?groups.map((g,i)=>`<div class="card" role="button" onclick="lifespanDetail('${v.id}',${i})" style="cursor:pointer"><div class="row"><strong>${esc(g.type)}</strong><span class="mut">${g.n} troca${g.n>1?"s":""} ›</span></div>
     <div class="mut" style="margin-top:2px">${g.brand!=="—"?esc(g.brand):"Sem marca/modelo registado"}</div>
     <div style="margin-top:6px;display:flex;gap:14px">${g.avgKm?`<span class="num" style="font-size:17px">${g.avgKm.toLocaleString("pt-PT")} km</span>`:""}<span class="num" style="font-size:17px">${fmtDays(g.avgDays)}</span></div></div>`).join("")
   :`<div class="empty">Ainda não há duas ocorrências do mesmo tipo de registo para calcular durações.</div>`}
   `;
+}
+function baseBrands(){
+  const removed=meta.brandsRemoved||[],custom=meta.brandsCustom||[];
+  return custom.filter(t=>!removed.includes(t)).sort((a,b)=>a.localeCompare(b,"pt"));
+}
+function allBrands(){
+  const extra=[];
+  S.vehicles.forEach(v=>(v.records||[]).forEach(r=>{if(r.brand)extra.push(r.brand.trim())}));
+  const out=[...baseBrands()];extra.forEach(t=>{if(t&&!out.includes(t))out.push(t)});
+  return out.sort((a,b)=>a.localeCompare(b,"pt"));
+}
+function manageBrands(){
+  document.querySelectorAll(".sheet").forEach(s=>s.remove());
+  const list=baseBrands();
+  const d=sheet(`<h2>Gerir marcas/modelos</h2><p class="mut">Sugeridas ao preencher "Marca/modelo" num registo, em todos os ativos. Apagar uma marca aqui não apaga os registos já guardados com ela.</p>
+  ${list.length?list.map((t,i)=>`<div class="card"><div class="row"><strong>${esc(t)}</strong><button type="button" class="btn del sm" onclick="removeBrand(${i})">Apagar</button></div></div>`).join(""):`<div class="empty">Sem marcas/modelos guardados ainda.</div>`}
+  <label style="margin-top:14px">Adicionar marca/modelo</label><div class="g2"><input id="newbrand" placeholder="Ex.: Michelin CrossClimate 2"><button type="button" class="btn" id="addbrand">Adicionar</button></div>
+  <div class="acts"><button type="button" class="btn ghost" data-close>Fechar</button></div>`,()=>{});
+  d.querySelector("#addbrand").onclick=async()=>{
+    const val=(d.querySelector("#newbrand").value||"").trim();if(!val)return;
+    meta.brandsRemoved=(meta.brandsRemoved||[]).filter(x=>x!==val);
+    meta.brandsCustom=[...new Set([...(meta.brandsCustom||[]),val])];
+    try{await tx("kv","readwrite",s=>s.put(meta,"meta"))}catch(e){}
+    manageBrands();
+  };
+}
+async function removeBrand(i){
+  const list=baseBrands(),t=list[i];if(t===undefined)return;
+  meta.brandsRemoved=[...new Set([...(meta.brandsRemoved||[]),t])];
+  meta.brandsCustom=(meta.brandsCustom||[]).filter(x=>x!==t);
+  try{await tx("kv","readwrite",s=>s.put(meta,"meta"))}catch(e){}
+  manageBrands();
 }
 function manageTypes(){
   document.querySelectorAll(".sheet").forEach(s=>s.remove());
@@ -672,7 +728,7 @@ function planSheet(){
   const v=cur();document.querySelectorAll(".sheet").forEach(s=>s.remove());
   const pa=Object.fromEntries(planAlerts(v).map(a=>[a.planId,a]));
   sheet(`<h2>Plano de manutenção</h2><p class="mut">Define de quanto em quanto tempo ou km se faz cada intervenção. Os avisos calculam-se sozinhos a partir do último registo desse tipo. Os valores são sugestões: ajusta-os ao manual do fabricante.</p>
-  ${v.plan.map(p=>`<div class="card"><div class="row"><div><strong>${esc(p.type)}</strong><div class="mut">${[p.km?"cada "+fmtCounterN(p.km,unitOf(v)):"",p.months?"cada "+p.months+" meses":""].filter(Boolean).join(" · ")||"Sem intervalo"}</div>${pa[p.id]&&pa[p.id].none?`<div class="mut">Sem histórico: regista a última vez ou indica-a ao editar.</div>`:""}</div><button type="button" class="btn ghost sm" onclick="editPlan('${p.id}')">Editar</button></div></div>`).join("")}
+  ${[...v.plan].sort((a,b)=>a.type.localeCompare(b.type,"pt")).map(p=>`<div class="card"><div class="row"><div><strong>${esc(p.type)}</strong><div class="mut">${[p.km?"cada "+fmtCounterN(p.km,unitOf(v)):"",p.months?"cada "+p.months+" meses":""].filter(Boolean).join(" · ")||"Sem intervalo"}</div>${pa[p.id]&&pa[p.id].none?`<div class="mut">Sem histórico: regista a última vez ou indica-a ao editar.</div>`:""}</div><button type="button" class="btn ghost sm" onclick="editPlan('${p.id}')">Editar</button></div></div>`).join("")}
   <div class="acts"><button type="button" class="btn ghost" data-close>Fechar</button><button type="button" class="btn" onclick="editPlan()">+ Intervenção</button></div>`,()=>{});
 }
 function editPlan(id){
