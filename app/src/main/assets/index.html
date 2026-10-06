@@ -183,6 +183,17 @@ const src=p=>p?(PH[p]||""):"";
 const thumb=v=>v.photo?`<img class="thumb" src="${src(v.photo)}" alt="">`:`<div class="thumb">🚗</div>`;
 const near=(a,v)=>{const i=alertInfo(a,v);return((i.days!==null&&i.days<=60)||(i.kmL!==null&&i.kmL<=2000))?i:null};
 const openV=id=>{S.sel=id;S.tab="resumo";render()};
+let heroStartX=null,heroStartY=null;
+function heroTouchStart(e){const t=e.touches[0];heroStartX=t.clientX;heroStartY=t.clientY}
+function heroTouchEnd(e){
+  if(heroStartX==null)return;
+  const t=e.changedTouches[0],dx=t.clientX-heroStartX,dy=t.clientY-heroStartY;
+  heroStartX=null;
+  if(Math.abs(dx)<60||Math.abs(dx)<Math.abs(dy))return;
+  const ids=S.vehicles.map(x=>x.id),i=ids.indexOf(S.sel);if(i<0||ids.length<2)return;
+  S.sel=ids[dx<0?(i+1)%ids.length:(i-1+ids.length)%ids.length];
+  render();
+}
 function listView(){
   const n=S.vehicles.reduce((s,v)=>s+allAlerts(v).filter(a=>near(a,v)).length,0);
   return `<div class="top"><h1><span class="brand">RT</span>RLTecAuto</h1><button class="btn ghost sm" onclick="backup()">Cópia</button></div>
@@ -205,7 +216,7 @@ function vehicleView(v){
   if(S.tab==="resumo")body=resumo(v);else if(S.tab==="registos")body=registos(v);else if(S.tab==="avisos")body=avisos(v);else if(S.tab==="tecnico")body=tecnico(v);else body=relatorios(v);
   const fab=S.tab==="avisos"?`<button class="btn fab" onclick="editAlert()">+ Aviso</button>`:S.tab==="tecnico"?`<button class="btn fab" onclick="editTech()">+ Detalhe</button>`:S.tab==="relatorios"?"":`<button class="btn fab" onclick="editRec()">+ Registo</button>`;
   return `<div class="top"><button class="btn ghost sm" onclick="S.sel=null;render()">‹ Ativos</button><button class="btn ghost sm" onclick="editVeh('${v.id}')">Editar</button></div>
-  <div class="hero">${thumb(v)}<div><h1 style="font-size:26px">${esc(v.name)}</h1>${unitOf(v)!=="none"?`<div class="num">${(Number(v.km)||0).toLocaleString("pt-PT")} <span style="font-size:20px">${UNIT_SUFFIX[unitOf(v)].trim()}</span></div>`:""}${v.plate?plate(v.plate):""}</div></div>
+  <div class="hero" ontouchstart="heroTouchStart(event)" ontouchend="heroTouchEnd(event)">${thumb(v)}<div><h1 style="font-size:26px">${esc(v.name)}</h1>${unitOf(v)!=="none"?`<div class="num">${(Number(v.km)||0).toLocaleString("pt-PT")} <span style="font-size:20px">${UNIT_SUFFIX[unitOf(v)].trim()}</span></div>`:""}${v.plate?plate(v.plate):""}</div>${S.vehicles.length>1?`<span class="mut" style="margin-left:auto;align-self:center;font-size:22px">⇄</span>`:""}</div>
   <div class="tabs" role="tablist">${tabs.map(t=>`<button role="tab" aria-selected="${S.tab===t[0]}" onclick="S.tab='${t[0]}';render()">${t[1]}</button>`).join("")}</div>${body}${fab}`;
 }
 function resumo(v){
@@ -569,22 +580,41 @@ function annualKm(v){
   byDate[today()]=Math.max(byDate[today()]||0,Number(v.km)||0);
   const arr=Object.entries(byDate).map(([d,k])=>({d,k})).sort((a,b)=>a.d.localeCompare(b.d));
   if(arr.length<2||arr[arr.length-1].k<=arr[0].k)return null;
-  const years={};
-  for(let i=1;i<arr.length;i++){
-    const a=arr[i-1],b=arr[i],dkm=b.k-a.k;if(dkm<=0)continue;
-    const d0=new Date(a.d+"T12:00"),d1=new Date(b.d+"T12:00"),totalDays=Math.max(1,(d1-d0)/864e5);
-    let cur=new Date(d0);
-    while(cur<d1){
-      const yEnd=new Date(cur.getFullYear(),11,31,23,59,59),segEnd=yEnd<d1?yEnd:d1;
-      const segDays=Math.max(0,(segEnd-cur)/864e5),y=cur.getFullYear();
-      years[y]=(years[y]||0)+dkm*(segDays/totalDays);
-      cur=new Date(segEnd.getTime()+36e5);
-    }
+  // Km por ano = diferença entre a última leitura conhecida até ao fim desse ano e a do ano anterior.
+  // Simples de confirmar: a soma dos anos dá sempre exatamente o total percorrido.
+  const firstY=Number(arr[0].d.slice(0,4)),lastY=Number(arr[arr.length-1].d.slice(0,4));
+  let idx=0;const endOfYear={};
+  for(let y=firstY;y<=lastY;y++){
+    while(idx+1<arr.length&&arr[idx+1].d<=y+"-12-31")idx++;
+    endOfYear[y]=arr[idx].k;
   }
-  Object.keys(years).forEach(y=>years[y]=Math.round(years[y]));
+  const years={};let prev=arr[0].k;
+  for(let y=firstY;y<=lastY;y++){years[y]=Math.max(0,endOfYear[y]-prev);prev=endOfYear[y]}
   const totalKm=arr[arr.length-1].k-arr[0].k;
   const totalDays=Math.max(1,(new Date(arr[arr.length-1].d+"T12:00")-new Date(arr[0].d+"T12:00"))/864e5);
   return{years,avgPerYear:Math.round(totalKm/(totalDays/365)),totalKm,totalDays};
+}
+function yearDetail(vId,year){
+  document.querySelectorAll(".sheet").forEach(s=>s.remove());
+  const v=S.vehicles.find(x=>x.id===vId);if(!v)return;
+  const u=unitOf(v);
+  const recs=(v.records||[]).filter(r=>(r.date||"").startsWith(year)).sort((a,b)=>b.date.localeCompare(a.date));
+  const total=recs.reduce((s,r)=>s+(Number(r.cost)||0),0);
+  sheet(`<h2 style="font-size:19px">${esc(v.name)} — ${year}</h2><p class="mut" style="margin-top:-6px">${recs.length} registo${recs.length!==1?"s":""} · ${fmtEur(total)}</p>
+  ${recs.length?recs.map(r=>`<div class="card"><div class="row"><div><strong>${esc(r.type)}</strong><div class="mut">${fmtD(r.date)}${r.km?" · "+fmtCounterN(r.km,u):""}</div></div>${r.cost?`<span class="num" style="font-size:15px">${fmtEur(r.cost)}</span>`:""}</div>${r.brand?`<div class="mut" style="margin-top:3px">${esc(r.brand)}</div>`:""}</div>`).join(""):`<div class="empty">Sem registos neste ano.</div>`}
+  <div class="acts"><button type="button" class="btn ghost" data-close>Fechar</button></div>`,()=>{});
+}
+function compareAssets(){
+  document.querySelectorAll(".sheet").forEach(s=>s.remove());
+  const data=S.vehicles.filter(v=>unitOf(v)!=="none").map(v=>({v,ann:annualKm(v)})).filter(x=>x.ann);
+  const years=[...new Set(data.flatMap(x=>Object.keys(x.ann.years)))].sort().reverse();
+  const d=sheet(`<h2>Comparar ativos por ano</h2>
+  ${years.length?years.map(y=>`<h3 style="margin:14px 0 6px">${y}</h3>${data.filter(x=>x.ann.years[y]).sort((a,b)=>b.ann.years[y]-a.ann.years[y]).map(x=>{
+    const u=unitOf(x.v),suf=UNIT_SUFFIX[u].trim();
+    const cost=(x.v.records||[]).filter(r=>(r.date||"").startsWith(y)).reduce((s,r)=>s+(Number(r.cost)||0),0);
+    return `<div class="card"><div class="row"><strong>${esc(x.v.name)}</strong><span class="num" style="font-size:15px">${Number(x.ann.years[y]).toLocaleString("pt-PT")} ${suf}</span></div><div class="mut" style="margin-top:3px">${fmtEur(cost)}</div></div>`;
+  }).join("")}`).join(""):`<div class="empty">Ainda não há ativos com dados suficientes para comparar.</div>`}
+  <div class="acts"><button type="button" class="btn ghost" data-close>Fechar</button></div>`,()=>{});
 }
 function costStats(v){
   const total=(v.records||[]).reduce((s,r)=>s+(Number(r.cost)||0),0);
@@ -628,7 +658,7 @@ function lifespanDetail(vId,idx){
   const groups=groupLifespans(partLifespans(v));
   const g=groups[idx];if(!g)return;
   const u=unitOf(v);
-  sheet(`<h2 style="font-size:19px">${esc(type)}</h2><p class="mut" style="margin-top:-6px">${g.brand!=="—"?esc(g.brand):"Sem marca/modelo registado"}</p>
+  sheet(`<h2 style="font-size:19px">${esc(g.type)}</h2><p class="mut" style="margin-top:-6px">${g.brand!=="—"?esc(g.brand):"Sem marca/modelo registado"}</p>
   ${g.rows.map(r=>`<div class="card"><div class="row"><span>${fmtD(r.from)} → ${fmtD(r.to)}</span><span class="num" style="font-size:15px">${fmtDays(r.days)}</span></div>${r.km?`<div class="mut" style="margin-top:3px">${fmtCounterN(r.km,u)}</div>`:""}</div>`).join("")}
   <div class="acts"><button type="button" class="btn ghost" data-close>Fechar</button></div>`,()=>{});
 }
@@ -650,17 +680,21 @@ function relatorios(v){
   stats.push([fmtEur(c.avgYear),"Gasto / ano"]);
   if(c.perKm)stats.push([c.perKm.toLocaleString("pt-PT",{style:"currency",currency:"EUR",minimumFractionDigits:3})+"/"+suf,"Custo por "+suf]);
 
-  const years=ann?Object.entries(ann.years).sort((a,b)=>a[0]-b[0]):[];
-  const maxY=years.length?Math.max(...years.map(y=>y[1])):0;
-  const costYears=Object.entries(c.byYear).sort((a,b)=>a[0]-b[0]);
-  const maxC=costYears.length?Math.max(...costYears.map(y=>y[1])):0;
+  const annYears=ann?ann.years:{};
+  const allYears=[...new Set([...Object.keys(annYears),...Object.keys(c.byYear)])].sort().reverse();
+  const maxY=allYears.length?Math.max(...allYears.map(y=>annYears[y]||0)):0;
 
   return `
+  <div class="acts" style="margin:0 0 12px"><button class="btn ghost" onclick="compareAssets()">Comparar ativos</button></div>
   <div class="stats">${stats.map(([n,l])=>`<div class="stat"><div class="mut">${l}</div><div class="num" style="font-size:22px">${n}</div></div>`).join("")}</div>
 
-  ${years.length?`<h3 style="margin:16px 0 8px">${UNIT_NAME[u]} por ano</h3><div class="card">${years.map(([y,k])=>bar(y,k,maxY,Number(k).toLocaleString("pt-PT")+" "+suf)).join("")}</div>`:""}
-
-  ${costYears.length>1?`<h3 style="margin:16px 0 8px">Gasto por ano</h3><div class="card">${costYears.map(([y,k])=>bar(y,k,maxC,fmtEur(k),"var(--warn)")).join("")}</div>`:""}
+  ${allYears.length?`<h3 style="margin:16px 0 8px">Por ano</h3>${allYears.map(y=>{
+    const km=annYears[y]||0,cost=c.byYear[y]||0,perKm=km>0&&cost>0?cost/km:null;
+    return `<div class="card" role="button" onclick="yearDetail('${v.id}','${y}')" style="cursor:pointer">
+      ${km?bar(y,km,maxY,km.toLocaleString("pt-PT")+" "+suf):`<div class="row"><strong>${y}</strong><span class="mut">›</span></div>`}
+      <div class="mut" style="margin-top:4px">${fmtEur(cost)}${perKm?" · "+perKm.toLocaleString("pt-PT",{style:"currency",currency:"EUR",minimumFractionDigits:3})+"/"+suf:""} ›</div>
+    </div>`;
+  }).join("")}`:""}
 
   <h3 style="margin:16px 0 8px">Duração entre substituições</h3>
   <p class="mut" style="margin-top:0">Calculado entre registos sucessivos do mesmo tipo. Preenche "Marca/modelo" num registo (pneus, travões…) para comparares qual dura mais.</p>
