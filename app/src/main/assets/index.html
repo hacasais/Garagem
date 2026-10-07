@@ -196,7 +196,7 @@ function heroTouchEnd(e){
 }
 function listView(){
   const n=S.vehicles.reduce((s,v)=>s+allAlerts(v).filter(a=>near(a,v)).length,0);
-  return `<div class="top"><h1><span class="brand">RT</span>RLTecAuto</h1><button class="btn ghost sm" onclick="backup()">Cópia</button></div>
+  return `<div class="top"><h1><span class="brand">RT</span>RLTecAuto</h1><div style="display:flex;gap:6px">${S.vehicles.length>1?`<button class="btn ghost sm" onclick="compareAssets()">Comparar</button>`:""}<button class="btn ghost sm" onclick="backup()">Cópia</button></div></div>
   ${bkNote()}
   ${n?`<p class="mut" style="margin:0 0 12px">${n} aviso${n>1?"s":""} nos próximos 2 meses (ou a menos de 2 000 km)</p>`:""}
   ${S.vehicles.length?S.vehicles.map(vcard).join(""):`<div class="empty">Ainda não tens nenhum ativo.<br>Adiciona o primeiro para começar a registar.</div>`}
@@ -606,17 +606,72 @@ function yearDetail(vId,year){
   ${recs.length?recs.map(r=>`<div class="card"><div class="row"><div><strong>${esc(r.type)}</strong><div class="mut">${fmtD(r.date)}${r.km?" · "+fmtCounterN(r.km,u):""}</div></div>${r.cost?`<span class="num" style="font-size:15px">${fmtEur(r.cost)}</span>`:""}</div>${r.brand?`<div class="mut" style="margin-top:3px">${esc(r.brand)}</div>`:""}</div>`).join(""):`<div class="empty">Sem registos neste ano.</div>`}
   <div class="acts"><button type="button" class="btn ghost" data-close>Fechar</button></div>`,()=>{});
 }
+const CMP_METRICS=[["km","Km / horas por ano"],["cost","Gastos"],["tasks","Tarefas realizadas"],["avisos","Avisos pendentes"],["pecas","Duração entre substituições"]];
 function compareAssets(){
   document.querySelectorAll(".sheet").forEach(s=>s.remove());
-  const data=S.vehicles.filter(v=>unitOf(v)!=="none").map(v=>({v,ann:annualKm(v)})).filter(x=>x.ann);
-  const years=[...new Set(data.flatMap(x=>Object.keys(x.ann.years)))].sort().reverse();
-  const d=sheet(`<h2>Comparar ativos por ano</h2>
-  ${years.length?years.map(y=>`<h3 style="margin:14px 0 6px">${y}</h3>${data.filter(x=>x.ann.years[y]).sort((a,b)=>b.ann.years[y]-a.ann.years[y]).map(x=>{
-    const u=unitOf(x.v),suf=UNIT_SUFFIX[u].trim();
-    const cost=(x.v.records||[]).filter(r=>(r.date||"").startsWith(y)).reduce((s,r)=>s+(Number(r.cost)||0),0);
-    return `<div class="card"><div class="row"><strong>${esc(x.v.name)}</strong><span class="num" style="font-size:15px">${Number(x.ann.years[y]).toLocaleString("pt-PT")} ${suf}</span></div><div class="mut" style="margin-top:3px">${fmtEur(cost)}</div></div>`;
-  }).join("")}`).join(""):`<div class="empty">Ainda não há ativos com dados suficientes para comparar.</div>`}
-  <div class="acts"><button type="button" class="btn ghost" data-close>Fechar</button></div>`,()=>{});
+  S.cmp=S.cmp||{assets:[],metrics:["km","cost"]};
+  const d=sheet(`<h2>Comparar ativos</h2>
+  <label>Ativos a comparar</label>
+  ${S.vehicles.map(v=>`<label style="display:flex;gap:10px;align-items:center;margin:8px 0"><input type="checkbox" class="cmpv" value="${v.id}" ${S.cmp.assets.includes(v.id)?"checked":""} style="width:22px;min-height:0"> ${esc(v.name)}</label>`).join("")||`<p class="mut">Ainda não tens ativos suficientes.</p>`}
+  <label style="margin-top:14px">O que comparar</label>
+  ${CMP_METRICS.map(([k,l])=>`<label style="display:flex;gap:10px;align-items:center;margin:8px 0"><input type="checkbox" class="cmpm" value="${k}" ${S.cmp.metrics.includes(k)?"checked":""} style="width:22px;min-height:0"> ${l}</label>`).join("")}
+  <div class="acts"><button type="button" class="btn ghost" data-close>Fechar</button><button type="button" class="btn" id="cmpgo">Comparar</button></div>`,()=>{});
+  d.querySelector("#cmpgo").onclick=()=>{
+    S.cmp.assets=[...d.querySelectorAll(".cmpv:checked")].map(x=>x.value);
+    S.cmp.metrics=[...d.querySelectorAll(".cmpm:checked")].map(x=>x.value);
+    if(S.cmp.assets.length<2){alert("Escolhe pelo menos 2 ativos para comparar.");return}
+    if(!S.cmp.metrics.length){alert("Escolhe pelo menos uma métrica.");return}
+    compareResults();
+  };
+}
+function compareResults(){
+  document.querySelectorAll(".sheet").forEach(s=>s.remove());
+  const vs=S.cmp.assets.map(id=>S.vehicles.find(v=>v.id===id)).filter(Boolean);
+  let html=`<h2>Comparação</h2><div class="acts" style="margin:0 0 4px"><button type="button" class="btn ghost sm" onclick="compareAssets()">‹ Ajustar seleção</button></div>`;
+
+  if(S.cmp.metrics.includes("km")){
+    html+=`<h3 style="margin:16px 0 8px">Km / horas por ano</h3>`;
+    const data=vs.map(v=>({v,ann:annualKm(v)}));
+    const years=[...new Set(data.flatMap(x=>x.ann?Object.keys(x.ann.years):[]))].sort().reverse();
+    if(!years.length)html+=`<div class="empty">Sem dados suficientes para nenhum dos ativos escolhidos.</div>`;
+    years.forEach(y=>{
+      const maxv=Math.max(1,...data.map(x=>(x.ann&&x.ann.years[y])||0));
+      html+=`<div class="mut" style="margin:10px 0 4px;font-weight:600">${y}</div><div class="card">`;
+      data.forEach(x=>{if(!x.ann||!x.ann.years[y])return;const suf=UNIT_SUFFIX[unitOf(x.v)].trim();
+        html+=bar(x.v.name,x.ann.years[y],maxv,Number(x.ann.years[y]).toLocaleString("pt-PT")+" "+suf);});
+      html+=`</div>`;
+    });
+  }
+  if(S.cmp.metrics.includes("cost")){
+    html+=`<h3 style="margin:16px 0 8px">Gastos (total)</h3>`;
+    const totals=vs.map(v=>(v.records||[]).reduce((s,r)=>s+(Number(r.cost)||0),0));
+    const maxv=Math.max(1,...totals);
+    html+=`<div class="card">${vs.map((v,i)=>bar(v.name,totals[i],maxv,fmtEur(totals[i]),"var(--warn)")).join("")}</div>`;
+  }
+  if(S.cmp.metrics.includes("tasks")){
+    html+=`<h3 style="margin:16px 0 8px">Tarefas realizadas</h3>`;
+    const counts=vs.map(v=>(v.records||[]).length);
+    const maxv=Math.max(1,...counts);
+    html+=`<div class="card">${vs.map((v,i)=>bar(v.name,counts[i],maxv,counts[i]+"")).join("")}</div>`;
+  }
+  if(S.cmp.metrics.includes("avisos")){
+    html+=`<h3 style="margin:16px 0 8px">Avisos pendentes</h3>`;
+    html+=vs.map(v=>{
+      const al=allAlerts(v).filter(a=>near(a,v));
+      return `<div class="card"><div class="row"><strong>${esc(v.name)}</strong><span class="tag ${al.length?"warn":"ok"}">${al.length} pendente${al.length!==1?"s":""}</span></div></div>`;
+    }).join("");
+  }
+  if(S.cmp.metrics.includes("pecas")){
+    html+=`<h3 style="margin:16px 0 8px">Duração entre substituições</h3>`;
+    vs.forEach(v=>{
+      const groups=groupLifespans(partLifespans(v));
+      html+=`<div class="mut" style="margin:10px 0 4px;font-weight:600">${esc(v.name)}</div>`;
+      html+=groups.length?groups.map(g=>`<div class="card"><div class="row"><span>${esc(g.type)}${g.brand!=="—"?" · "+esc(g.brand):""}</span><span class="num" style="font-size:15px">${g.avgKm?g.avgKm.toLocaleString("pt-PT")+" km · ":""}${fmtDays(g.avgDays)}</span></div></div>`).join(""):`<div class="empty">Sem dados suficientes.</div>`;
+    });
+  }
+
+  html+=`<div class="acts"><button type="button" class="btn ghost" data-close>Fechar</button></div>`;
+  sheet(html,()=>{});
 }
 function costStats(v){
   const total=(v.records||[]).reduce((s,r)=>s+(Number(r.cost)||0),0);
