@@ -356,7 +356,8 @@ function editKm(){
   <div id="kmcands" style="display:none;gap:8px;flex-wrap:wrap;margin-top:4px"></div>
   <label style="margin-top:10px">${unitLabel} atuais</label><input name="km" type="number" inputmode="numeric" min="0" required value="${v.km||""}">
   <div class="acts"><button type="button" class="btn ghost" data-close>Cancelar</button><button class="btn">Guardar</button></div>`,
-  f=>{const n=Number(f.get("km"))||0;if(n<(v.km||0)&&!confirm("O valor é inferior ao atual. Guardar mesmo assim?"))return;v.km=n});
+  f=>{const n=Number(f.get("km"))||0;if(n<(v.km||0)&&!confirm("O valor é inferior ao atual. Guardar mesmo assim?"))return;v.km=n;
+    v.kmLog=v.kmLog||[];const t=today(),ex=v.kmLog.find(x=>x.date===t);if(ex)ex.km=Math.max(ex.km,n);else v.kmLog.push({date:t,km:n});});
   const $d=s=>d.querySelector(s),cam=$d("#kmcam"),m=$d("#kmmsg"),inp=$d("[name=km]"),cands=$d("#kmcands");
   const curKm=Number(v.km)||0;
   if(!cam)return;
@@ -577,6 +578,7 @@ function annualKm(v){
   if(unitOf(v)==="none")return null;
   const byDate={};
   (v.records||[]).forEach(r=>{if(Number(r.km)>0&&r.date){if(!byDate[r.date]||r.km>byDate[r.date])byDate[r.date]=Number(r.km)}});
+  (v.kmLog||[]).forEach(e=>{if(Number(e.km)>0&&e.date){if(!byDate[e.date]||e.km>byDate[e.date])byDate[e.date]=Number(e.km)}});
   byDate[today()]=Math.max(byDate[today()]||0,Number(v.km)||0);
   const arr=Object.entries(byDate).map(([d,k])=>({d,k})).sort((a,b)=>a.d.localeCompare(b.d));
   if(arr.length<2||arr[arr.length-1].k<=arr[0].k)return null;
