@@ -49,13 +49,19 @@ button{cursor:pointer}
 .photos img{width:60px;height:60px;object-fit:cover;border-radius:2px;cursor:zoom-in;border:1px solid var(--line)}
 .fab{position:fixed;right:16px;bottom:calc(16px + env(safe-area-inset-bottom,0px));box-shadow:0 2px 10px rgba(0,0,0,.25);clip-path:polygon(0 0,calc(100% - 16px) 0,100% 16px,100% 100%,0 100%);border-radius:2px;padding:14px 22px}
 .sheet{position:fixed;inset:0;background:rgba(10,14,13,.55);display:flex;align-items:flex-end;justify-content:center;z-index:5}
-.sheet form,.sheet .box{background:var(--card);width:100%;max-width:560px;max-height:92%;overflow:auto;border-radius:10px 10px 0 0;padding:18px 16px calc(18px + env(safe-area-inset-bottom,0px));border-top:3px solid var(--pri)}
+.sheet form,.sheet .box{background:var(--card);width:100%;max-width:560px;max-height:92%;overflow:auto;overscroll-behavior:contain;border-radius:10px 10px 0 0;padding:18px 16px calc(18px + env(safe-area-inset-bottom,0px));border-top:3px solid var(--pri)}
+body{overscroll-behavior-y:contain}
+main{overscroll-behavior:contain}
 label{display:block;font-weight:600;font-size:14px;margin:12px 0 4px;color:var(--ink)}
 input,select,textarea{width:100%;background:var(--bg);border:1.5px solid var(--line);border-radius:2px;padding:10px 12px;min-height:44px;font-size:15px}
 :focus-visible{outline:2px solid var(--pri);outline-offset:1px}
 .g2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 .acts{display:flex;gap:8px;margin-top:16px}.acts .btn{flex:1}
 .empty{text-align:center;color:var(--mut);padding:28px 12px;border:1.5px dashed var(--line);border-radius:2px}
+details.card summary{cursor:pointer;font-weight:600;color:var(--pri);list-style:none}
+details.card summary::-webkit-details-marker{display:none}
+details.card summary::after{content:"›";float:right;transform:rotate(90deg);display:inline-block;transition:transform .15s}
+details.card[open] summary::after{transform:rotate(270deg)}
 #lb{position:fixed;inset:0;background:#000d;display:none;place-items:center;z-index:9}#lb img{max-width:96%;max-height:90%;border-radius:4px}
 </style>
 </head>
@@ -169,7 +175,18 @@ function alertInfo(a,v){
   let kmL=a.km?Number(a.km)-Number(v.km||0):null;
   let lvl=0,txt=[];
   if(days!==null){txt.push(days<0?`há ${-days} dias`:days===0?"hoje":`em ${days} dias`);if(days<0)lvl=2;else if(days<=30)lvl=Math.max(lvl,1)}
-  if(kmL!==null){const u=unitOf(v);txt.push(kmL<=0?`passou ${fmtCounterN(-kmL,u)}`:`faltam ${fmtCounterN(kmL,u)}`);if(kmL<=0)lvl=2;else if(kmL<=1000)lvl=Math.max(lvl,1)}
+  if(kmL!==null){
+    const u=unitOf(v);
+    txt.push(kmL<=0?`passou ${fmtCounterN(-kmL,u)}`:`faltam ${fmtCounterN(kmL,u)}`);
+    if(kmL<=0)lvl=2;else if(kmL<=1000)lvl=Math.max(lvl,1);
+    if(days===null&&kmL>0){
+      const ann=annualKm(v);
+      if(ann&&ann.avgPerYear>0){
+        const dt=new Date();dt.setDate(dt.getDate()+Math.round(kmL/ann.avgPerYear*365));
+        txt.push("previsão "+dt.toLocaleDateString("pt-PT",{month:"short",year:"numeric"}));
+      }
+    }
+  }
   return{lvl,days,kmL,txt:txt.join(" · "),score:lvl*1e6-(days??999)}
 }
 function render(){
@@ -347,6 +364,33 @@ function editVeh(id){
   });
 }
 function delVeh(id){if(confirm("Apagar este ativo e todos os registos? Não é possível desfazer.")){removed.add(id);S.vehicles=S.vehicles.filter(v=>v.id!==id);S.sel=null;document.querySelector(".sheet")?.remove();render()}}
+function kmLogView(){
+  const v=cur();document.querySelectorAll(".sheet").forEach(s=>s.remove());
+  const u=unitOf(v),log=[...(v.kmLog||[])].sort((a,b)=>b.date.localeCompare(a.date));
+  sheet(`<h2 style="font-size:19px">Histórico de ${UNIT_NAME[u].toLowerCase()}</h2><p class="mut">Pontos usados para calcular os relatórios. Corrige ou apaga se algum valor foi escrito por engano.</p>
+  ${log.length?log.map((e,i)=>`<div class="card"><div class="row"><span>${fmtD(e.date)}</span><span class="num" style="font-size:15px">${fmtCounterN(e.km,u)}</span></div>
+  <div class="acts" style="margin-top:8px"><button type="button" class="btn ghost sm" onclick="editKmLog(${i})">Editar</button><button type="button" class="btn del sm" onclick="delKmLog(${i})">Apagar</button></div></div>`).join(""):`<div class="empty">Ainda sem histórico próprio — a partir de agora, cada "Atualizar ${u==="horas"?"horas":"km"}" fica aqui registado com a data.</div>`}
+  <p class="mut">Nota: os registos de manutenção com ${u==="horas"?"horas":"km"} preenchido também contam para os relatórios, mas corrigem-se no próprio registo, não aqui.</p>
+  <div class="acts"><button type="button" class="btn ghost" data-close>Fechar</button></div>`,()=>{});
+}
+function editKmLog(i){
+  const v=cur();document.querySelectorAll(".sheet").forEach(s=>s.remove());
+  const u=unitOf(v),log=[...(v.kmLog||[])].sort((a,b)=>b.date.localeCompare(a.date));
+  const e=log[i];if(!e)return;
+  sheet(`<h2 style="font-size:19px">Corrigir valor</h2>
+  <label>Data</label><input name="date" type="date" value="${e.date}">
+  <label>${UNIT_NAME[u]}</label><input name="km" type="number" inputmode="numeric" min="0" value="${e.km}">
+  <div class="acts"><button type="button" class="btn ghost" onclick="kmLogView()">Cancelar</button><button class="btn">Guardar</button></div>`,
+  f=>{e.date=f.get("date")||e.date;e.km=Number(f.get("km"))||0;setTimeout(kmLogView,50);});
+}
+function delKmLog(i){
+  const v=cur(),log=[...(v.kmLog||[])].sort((a,b)=>b.date.localeCompare(a.date));
+  const e=log[i];if(!e)return;
+  if(!confirm("Apagar este ponto do histórico?"))return;
+  v.kmLog=(v.kmLog||[]).filter(x=>x!==e);
+  document.querySelectorAll(".sheet").forEach(s=>s.remove());
+  kmLogView();
+}
 function editKm(){
   const v=cur(),u=unitOf(v),unitLabel=UNIT_NAME[u]||"Quilómetros";
   const d=sheet(`<h2 style="font-size:19px">Atualizar ${unitLabel.toLowerCase()}</h2>
@@ -355,7 +399,8 @@ function editKm(){
   <div id="kmmsg" class="mut" style="margin-top:6px;min-height:18px"></div>
   <div id="kmcands" style="display:none;gap:8px;flex-wrap:wrap;margin-top:4px"></div>
   <label style="margin-top:10px">${unitLabel} atuais</label><input name="km" type="number" inputmode="numeric" min="0" required value="${v.km||""}">
-  <div class="acts"><button type="button" class="btn ghost" data-close>Cancelar</button><button class="btn">Guardar</button></div>`,
+  <div class="acts"><button type="button" class="btn ghost" data-close>Cancelar</button><button class="btn">Guardar</button></div>
+  <div class="acts"><button type="button" class="btn ghost sm" onclick="kmLogView()">Ver / corrigir histórico de valores</button></div>`,
   f=>{const n=Number(f.get("km"))||0;if(n<(v.km||0)&&!confirm("O valor é inferior ao atual. Guardar mesmo assim?"))return;v.km=n;
     v.kmLog=v.kmLog||[];const t=today(),ex=v.kmLog.find(x=>x.date===t);if(ex)ex.km=Math.max(ex.km,n);else v.kmLog.push({date:t,km:n});});
   const $d=s=>d.querySelector(s),cam=$d("#kmcam"),m=$d("#kmmsg"),inp=$d("[name=km]"),cands=$d("#kmcands");
@@ -606,7 +651,27 @@ function yearDetail(vId,year){
   ${recs.length?recs.map(r=>`<div class="card"><div class="row"><div><strong>${esc(r.type)}</strong><div class="mut">${fmtD(r.date)}${r.km?" · "+fmtCounterN(r.km,u):""}</div></div>${r.cost?`<span class="num" style="font-size:15px">${fmtEur(r.cost)}</span>`:""}</div>${r.brand?`<div class="mut" style="margin-top:3px">${esc(r.brand)}</div>`:""}</div>`).join(""):`<div class="empty">Sem registos neste ano.</div>`}
   <div class="acts"><button type="button" class="btn ghost" data-close>Fechar</button></div>`,()=>{});
 }
-const CMP_METRICS=[["km","Km / horas por ano"],["cost","Gastos"],["tasks","Tarefas realizadas"],["avisos","Avisos pendentes"],["pecas","Duração entre substituições"]];
+const CMP_METRICS=[["km","Km / horas por ano"],["cost","Gastos"],["perkm","Custo por km/hora"],["tasks","Tarefas realizadas"],["avisos","Avisos pendentes"],["pecas","Duração entre substituições"]];
+// Agrupa um valor numérico de registos por ano civil (soma por tipo de dado, ex.: custo).
+function byYearSum(v,fn){const o={};(v.records||[]).forEach(r=>{const y=(r.date||"").slice(0,4);if(y)o[y]=(o[y]||0)+fn(r)});return o}
+function byYearCount(v){const o={};(v.records||[]).forEach(r=>{const y=(r.date||"").slice(0,4);if(y)o[y]=(o[y]||0)+1});return o}
+// Bloco: barra total por ativo + <details> com o detalhe por ano.
+function cmpBlock(title,vs,totalFn,byYearFn,fmt,color){
+  const totals=vs.map(totalFn),maxv=Math.max(1,...totals);
+  let h=`<h3 style="margin:16px 0 8px">${title}</h3><div class="card">${vs.map((v,i)=>bar(v.name,totals[i],maxv,fmt(totals[i]),color)).join("")}</div>`;
+  const perYear=vs.map(byYearFn);
+  const years=[...new Set(perYear.flatMap(o=>Object.keys(o)))].sort().reverse();
+  if(years.length){
+    h+=`<details class="card"><summary>Ver por ano</summary><div style="margin-top:10px">`;
+    years.forEach(y=>{
+      const vals=vs.map((v,i)=>perYear[i][y]||0),my=Math.max(1,...vals);
+      h+=`<div class="mut" style="margin:8px 0 4px;font-weight:600">${y}</div>`;
+      vs.forEach((v,i)=>{if(!vals[i])return;h+=bar(v.name,vals[i],my,fmt(vals[i]),color)});
+    });
+    h+=`</div></details>`;
+  }
+  return h;
+}
 function compareAssets(){
   document.querySelectorAll(".sheet").forEach(s=>s.remove());
   S.cmp=S.cmp||{assets:[],metrics:["km","cost"]};
@@ -643,22 +708,26 @@ function compareResults(){
     });
   }
   if(S.cmp.metrics.includes("cost")){
-    html+=`<h3 style="margin:16px 0 8px">Gastos (total)</h3>`;
-    const totals=vs.map(v=>(v.records||[]).reduce((s,r)=>s+(Number(r.cost)||0),0));
-    const maxv=Math.max(1,...totals);
-    html+=`<div class="card">${vs.map((v,i)=>bar(v.name,totals[i],maxv,fmtEur(totals[i]),"var(--warn)")).join("")}</div>`;
+    html+=cmpBlock("Gastos",vs,v=>(v.records||[]).reduce((s,r)=>s+(Number(r.cost)||0),0),v=>byYearSum(v,r=>Number(r.cost)||0),fmtEur,"var(--warn)");
+  }
+  if(S.cmp.metrics.includes("perkm")){
+    html+=cmpBlock("Custo por km/h",vs,
+      v=>{const t=(v.records||[]).reduce((s,r)=>s+(Number(r.cost)||0),0),a=annualKm(v);return a&&a.totalKm>0?t/a.totalKm:0},
+      v=>{const u=unitOf(v);if(u==="none")return{};const cost=byYearSum(v,r=>Number(r.cost)||0),ann=annualKm(v);if(!ann)return{};const o={};Object.keys(ann.years).forEach(y=>{if(ann.years[y]>0)o[y]=(cost[y]||0)/ann.years[y]});return o},
+      n=>n?n.toLocaleString("pt-PT",{style:"currency",currency:"EUR",minimumFractionDigits:3}):"—","var(--warn)");
   }
   if(S.cmp.metrics.includes("tasks")){
-    html+=`<h3 style="margin:16px 0 8px">Tarefas realizadas</h3>`;
-    const counts=vs.map(v=>(v.records||[]).length);
-    const maxv=Math.max(1,...counts);
-    html+=`<div class="card">${vs.map((v,i)=>bar(v.name,counts[i],maxv,counts[i]+"")).join("")}</div>`;
+    html+=cmpBlock("Tarefas realizadas",vs,v=>(v.records||[]).length,byYearCount,n=>n+"");
   }
   if(S.cmp.metrics.includes("avisos")){
-    html+=`<h3 style="margin:16px 0 8px">Avisos pendentes</h3>`;
+    html+=`<h3 style="margin:16px 0 8px">Avisos</h3>`;
     html+=vs.map(v=>{
-      const al=allAlerts(v).filter(a=>near(a,v));
-      return `<div class="card"><div class="row"><strong>${esc(v.name)}</strong><span class="tag ${al.length?"warn":"ok"}">${al.length} pendente${al.length!==1?"s":""}</span></div></div>`;
+      const infos=allAlerts(v).map(a=>alertInfo(a,v));
+      const overdue=infos.filter(i=>i.lvl===2).length,soon=infos.filter(i=>i.lvl===1).length;
+      return `<div class="card"><div class="row"><strong>${esc(v.name)}</strong></div><div style="display:flex;gap:18px;margin-top:6px">
+        <div><div class="mut" style="font-size:11px">Vencidos</div><div class="num" style="font-size:18px;color:var(--bad)">${overdue}</div></div>
+        <div><div class="mut" style="font-size:11px">A vencer em breve</div><div class="num" style="font-size:18px;color:var(--warn)">${soon}</div></div>
+      </div></div>`;
     }).join("");
   }
   if(S.cmp.metrics.includes("pecas")){
