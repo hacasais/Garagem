@@ -261,7 +261,7 @@ function registos(v){
   const years=Object.keys(byYear).sort((a,b)=>b.localeCompare(a));
   const card=x=>`<div class="card">
     <div class="row">
-      <div><div style="font-weight:700;font-size:15px">${fmtD(x.date)}</div><div class="mut" style="margin-top:2px">${esc(x.type)}${x.brand?` · ${esc(x.brand)}`:""}</div></div>
+      <div><div style="font-weight:700;font-size:15px">${fmtD(x.date)}</div><div class="mut" style="margin-top:2px">${esc(x.type)}${x.brand?` · ${esc(x.brand)}`:""}${x.oneOff?' · <span title="Não conta para previsões">pontual</span>':""}</div></div>
       <div style="text-align:right">${x.km?`<div class="num" style="font-size:15px">${fmtCounterN(x.km,unitOf(v))}</div>`:""}${x.cost?`<div class="mut">${fmtEur(x.cost)}</div>`:""}</div>
     </div>
     ${x.notes?`<p style="margin:8px 0 0;font-size:14px">${esc(x.notes)}</p>`:""}
@@ -275,9 +275,42 @@ function alertCard(a,i,u){
   return `<div class="card"><div class="row"><div><strong>${esc(a.title)}</strong><div class="mut">${a.date?"Data: "+fmtD(a.date):""}${a.date&&a.km?" · ":""}${a.km?"Aos "+fmtCounterN(a.km,u):""}</div>${a.note?`<div class="mut" style="margin-top:3px">💡 ${esc(a.note)}</div>`:""}</div><span class="tag ${c}">${i.txt}</span></div>
   <div class="acts" style="margin-top:10px"><button class="btn sm" onclick="doneAlert('${a.id}')">Concluir</button><button class="btn ghost sm" onclick="${a.derived?`editPlan('${a.planId}')`:`editAlert('${a.id}')`}">Editar</button></div></div>`;
 }
+// Para cada tipo de registo, olha para a última ocorrência (ainda "em serviço") e compara
+// o tempo/km já passados com a duração média das trocas anteriores do mesmo tipo+marca.
+function predictedAlerts(v){
+  const groups=groupLifespans(partLifespans(v));
+  const byKey={};groups.forEach(g=>{byKey[g.type+"||"+g.brand]=g});
+  const latest={};
+  (v.records||[]).forEach(r=>{if(r.type&&r.date&&(!latest[r.type]||r.date>latest[r.type].date))latest[r.type]=r});
+  const out=[];
+  Object.values(latest).forEach(last=>{
+    const brand=(last.brand||"").trim()||"—";
+    const g=byKey[last.type+"||"+brand];
+    if(!g)return;
+    const daysSince=Math.round((new Date(today()+"T12:00")-new Date(last.date+"T12:00"))/864e5);
+    const kmSince=Number(last.km)>0&&unitOf(v)!=="none"?(Number(v.km)||0)-Number(last.km):null;
+    const kmRatio=g.avgKm&&kmSince!=null?kmSince/g.avgKm:null;
+    const dayRatio=g.avgDays?daysSince/g.avgDays:null;
+    const ratio=Math.max(kmRatio||0,dayRatio||0);
+    if(ratio<0.7)return;
+    out.push({type:last.type,brand,g,daysSince,kmSince,ratio,lvl:ratio>=1?2:1});
+  });
+  return out.sort((a,b)=>b.ratio-a.ratio);
+}
+function predCard(p,v){
+  const u=unitOf(v),c=["ok","warn","bad"][p.lvl];
+  const parts=[];
+  if(p.kmSince!=null&&p.g.avgKm)parts.push(`${fmtCounterN(p.kmSince,u)} de ${fmtCounterN(p.g.avgKm,u)} habituais`);
+  parts.push(`${fmtDays(p.daysSince)} de ${fmtDays(p.g.avgDays)} habituais`);
+  return `<div class="card"><div class="row"><div><strong>${esc(p.type)}</strong><div class="mut">${p.brand!=="—"?esc(p.brand):"Sem marca/modelo"}</div></div><span class="tag ${c}">${p.ratio>=1?"já passou a média":"a aproximar-se"}</span></div>
+  <div class="mut" style="margin-top:4px">${parts.join(" · ")} — baseado em ${p.g.n} troca${p.g.n>1?"s":""} anterior${p.g.n>1?"es":""}</div></div>`;
+}
 function avisos(v){
   const l=allAlerts(v).map(a=>({a,i:alertInfo(a,v)})).sort((x,y)=>y.i.score-x.i.score);
-  return `<div class="acts" style="margin:0 0 12px"><button class="btn ghost" onclick="planSheet()">Plano de manutenção</button></div>`+(l.length?l.map(x=>alertCard(x.a,x.i,unitOf(v))).join(""):`<div class="empty">Sem avisos. No plano de manutenção defines de quanto em quanto tempo ou km fazes cada intervenção; os avisos surgem depois de registares a última vez.</div>`);
+  const preds=predictedAlerts(v);
+  return `<div class="acts" style="margin:0 0 12px"><button class="btn ghost" onclick="planSheet()">Plano de manutenção</button></div>`
+  +(preds.length?`<h3 style="margin:0 0 4px">Previsões por histórico</h3><p class="mut" style="margin:0 0 8px">Estimativa a partir de trocas anteriores — ainda não é um aviso formal do plano.</p>${preds.map(p=>predCard(p,v)).join("")}`:"")
+  +(l.length?l.map(x=>alertCard(x.a,x.i,unitOf(v))).join(""):`<div class="empty">Sem avisos. No plano de manutenção defines de quanto em quanto tempo ou km fazes cada intervenção; os avisos surgem depois de registares a última vez.</div>`);
 }
 const TECH_CATS=[["capacidade","Capacidades"],["peca","Peças e referências"],["outro","Outros detalhes"]];
 const TECH_SUG={
@@ -446,13 +479,14 @@ function editRec(id,pre){
   <div><div class="row" style="align-items:baseline"><label style="margin:0">Marca / modelo</label><button type="button" class="btn ghost sm" style="padding:2px 8px;min-height:0;font-size:12px" onclick="manageBrands()">Gerir</button></div>
   <input name="brand" list="brandlist" placeholder="Ex.: Michelin CrossClimate 2" value="${esc(x.brand||"")}"></div></div>
   <datalist id="brandlist">${allBrands().map(t=>`<option value="${esc(t)}">`).join("")}</datalist>
+  <label style="display:flex;gap:10px;align-items:center;margin-top:14px"><input type="checkbox" name="oneoff" ${x.oneOff?"checked":""} style="width:22px;min-height:0"> Substituição pontual (ex.: defeito de fábrica) — não contar para previsões por histórico</label>
   <label>Notas (oficina, peças, referências…)</label><textarea name="notes" rows="3">${esc(x.notes)}</textarea>
   ${ASSETS?`<label>Fotografias (recibos, peças, danos)</label><input name="ph" type="file" accept="image/*" multiple>`:""}
   ${(x.photos||[]).length?`<div class="mut" style="margin-top:6px">${x.photos.length} fotografia(s) já guardada(s); novas serão adicionadas.</div>`:""}
   <div class="acts"><button type="button" class="btn ghost" data-close>Cancelar</button><button class="btn">Guardar</button></div>
   ${id?`<div class="acts"><button type="button" class="btn del" onclick="delRec('${id}')">Apagar registo</button></div>`:""}`,
   async(f,form)=>{const ph=await files(form,"ph");const o=id?x:{id:uid(),photos:[]};
-    Object.assign(o,{type:(f.get("type")||"").trim(),date:f.get("date"),km:Number(f.get("km"))||0,cost:Number(f.get("cost"))||0,brand:(f.get("brand")||"").trim(),notes:f.get("notes")});o.photos=[...(o.photos||[]),...ph];
+    Object.assign(o,{type:(f.get("type")||"").trim(),date:f.get("date"),km:Number(f.get("km"))||0,cost:Number(f.get("cost"))||0,brand:(f.get("brand")||"").trim(),oneOff:!!f.get("oneoff"),notes:f.get("notes")});o.photos=[...(o.photos||[]),...ph];
     if(!id){
       v.records.push(o);
       if(pre?.fromAlert)v.alerts=v.alerts.filter(a=>a.id!==pre.fromAlert);
@@ -627,19 +661,27 @@ function annualKm(v){
   byDate[today()]=Math.max(byDate[today()]||0,Number(v.km)||0);
   const arr=Object.entries(byDate).map(([d,k])=>({d,k})).sort((a,b)=>a.d.localeCompare(b.d));
   if(arr.length<2||arr[arr.length-1].k<=arr[0].k)return null;
-  // Km por ano = diferença entre a última leitura conhecida até ao fim desse ano e a do ano anterior.
-  // Simples de confirmar: a soma dos anos dá sempre exatamente o total percorrido.
-  const firstY=Number(arr[0].d.slice(0,4)),lastY=Number(arr[arr.length-1].d.slice(0,4));
-  let idx=0;const endOfYear={};
-  for(let y=firstY;y<=lastY;y++){
-    while(idx+1<arr.length&&arr[idx+1].d<=y+"-12-31")idx++;
-    endOfYear[y]=arr[idx].k;
+  // Distribui os km percorridos entre duas leituras proporcionalmente aos dias de cada ano civil.
+  // Anos sem nenhuma leitura própria (nem registo nem atualização de contador) ficam marcados
+  // como estimados — o valor existe, mas é calculado por interpolação, não medido diretamente.
+  const realYears=new Set(arr.map(p=>p.d.slice(0,4)));
+  const years={};
+  for(let i=1;i<arr.length;i++){
+    const a=arr[i-1],b=arr[i],dkm=b.k-a.k;if(dkm<=0)continue;
+    const d0=new Date(a.d+"T12:00"),d1=new Date(b.d+"T12:00"),totalDaysSeg=Math.max(1,(d1-d0)/864e5);
+    let cur=new Date(d0);
+    while(cur<d1){
+      const yEnd=new Date(cur.getFullYear(),11,31,23,59,59),segEnd=yEnd<d1?yEnd:d1;
+      const segDays=Math.max(0,(segEnd-cur)/864e5),y=cur.getFullYear();
+      years[y]=(years[y]||0)+dkm*(segDays/totalDaysSeg);
+      cur=new Date(segEnd.getTime()+36e5);
+    }
   }
-  const years={};let prev=arr[0].k;
-  for(let y=firstY;y<=lastY;y++){years[y]=Math.max(0,endOfYear[y]-prev);prev=endOfYear[y]}
+  Object.keys(years).forEach(y=>years[y]=Math.round(years[y]));
+  const estimated={};Object.keys(years).forEach(y=>{estimated[y]=!realYears.has(String(y))});
   const totalKm=arr[arr.length-1].k-arr[0].k;
   const totalDays=Math.max(1,(new Date(arr[arr.length-1].d+"T12:00")-new Date(arr[0].d+"T12:00"))/864e5);
-  return{years,avgPerYear:Math.round(totalKm/(totalDays/365)),totalKm,totalDays};
+  return{years,estimated,avgPerYear:Math.round(totalKm/(totalDays/365)),totalKm,totalDays};
 }
 function yearDetail(vId,year){
   document.querySelectorAll(".sheet").forEach(s=>s.remove());
@@ -702,8 +744,8 @@ function compareResults(){
     years.forEach(y=>{
       const maxv=Math.max(1,...data.map(x=>(x.ann&&x.ann.years[y])||0));
       html+=`<div class="mut" style="margin:10px 0 4px;font-weight:600">${y}</div><div class="card">`;
-      data.forEach(x=>{if(!x.ann||!x.ann.years[y])return;const suf=UNIT_SUFFIX[unitOf(x.v)].trim();
-        html+=bar(x.v.name,x.ann.years[y],maxv,Number(x.ann.years[y]).toLocaleString("pt-PT")+" "+suf);});
+      data.forEach(x=>{if(!x.ann||!x.ann.years[y])return;const suf=UNIT_SUFFIX[unitOf(x.v)].trim(),est=x.ann.estimated&&x.ann.estimated[y];
+        html+=bar(x.v.name+(est?" (estimado)":""),x.ann.years[y],maxv,Number(x.ann.years[y]).toLocaleString("pt-PT")+" "+suf);});
       html+=`</div>`;
     });
   }
@@ -760,6 +802,7 @@ function partLifespans(v){
     const sorted=[...list].sort((a,b)=>a.date.localeCompare(b.date)||(a.km||0)-(b.km||0));
     for(let i=1;i<sorted.length;i++){
       const a=sorted[i-1],b=sorted[i];
+      if(b.oneOff)continue; // esta troca não representa desgaste normal — não entra nas médias
       const days=Math.round((new Date(b.date+"T12:00")-new Date(a.date+"T12:00"))/864e5);
       if(days<=0)continue;
       const km=Number(b.km)>0&&Number(a.km)>0?Number(b.km)-Number(a.km):null;
@@ -814,10 +857,11 @@ function relatorios(v){
   <div class="acts" style="margin:0 0 12px"><button class="btn ghost" onclick="compareAssets()">Comparar ativos</button></div>
   <div class="stats">${stats.map(([n,l])=>`<div class="stat"><div class="mut">${l}</div><div class="num" style="font-size:22px">${n}</div></div>`).join("")}</div>
 
-  ${allYears.length?`<h3 style="margin:16px 0 8px">Por ano</h3>${allYears.map(y=>{
-    const km=annYears[y]||0,cost=c.byYear[y]||0,perKm=km>0&&cost>0?cost/km:null;
+  ${allYears.length?`<h3 style="margin:16px 0 8px">Por ano</h3><p class="mut" style="margin-top:0">"Estimado" = sem nenhuma leitura própria nesse ano; o valor é calculado por interpolação entre as leituras mais próximas.</p>${allYears.map(y=>{
+    const km=annYears[y]||0,cost=c.byYear[y]||0,perKm=km>0&&cost>0?cost/km:null,est=ann&&ann.estimated&&ann.estimated[y];
+    const yLabel=y+(est?" (estimado)":"");
     return `<div class="card" role="button" onclick="yearDetail('${v.id}','${y}')" style="cursor:pointer">
-      ${km?bar(y,km,maxY,km.toLocaleString("pt-PT")+" "+suf):`<div class="row"><strong>${y}</strong><span class="mut">›</span></div>`}
+      ${km?bar(yLabel,km,maxY,km.toLocaleString("pt-PT")+" "+suf):`<div class="row"><strong>${yLabel}</strong><span class="mut">›</span></div>`}
       <div class="mut" style="margin-top:4px">${fmtEur(cost)}${perKm?" · "+perKm.toLocaleString("pt-PT",{style:"currency",currency:"EUR",minimumFractionDigits:3})+"/"+suf:""} ›</div>
     </div>`;
   }).join("")}`:""}
