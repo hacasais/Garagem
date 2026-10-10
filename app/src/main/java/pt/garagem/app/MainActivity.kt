@@ -104,6 +104,38 @@ class MainActivity : Activity() {
         fun clearFile() { prefs.edit().remove("uri").apply() }
 
         @JavascriptInterface
+        fun openDataUri(dataUri: String, filename: String) {
+            runOnUiThread {
+                try {
+                    val comma = dataUri.indexOf(',')
+                    val header = dataUri.substring(5, comma)
+                    val mime = header.substringBefore(";").ifBlank { "application/octet-stream" }
+                    val bytes = android.util.Base64.decode(dataUri.substring(comma + 1), android.util.Base64.DEFAULT)
+                    val dir = File(cacheDir, "attach").apply { mkdirs() }
+                    val safeName = (if (filename.isBlank()) "ficheiro" else filename).replace(Regex("[^A-Za-z0-9._-]"), "_")
+                    val file = File(dir, safeName)
+                    file.writeBytes(bytes)
+                    val uri = FileProvider.getUriForFile(this@MainActivity, "$packageName.fileprovider", file)
+                    val intent = Intent(Intent.ACTION_VIEW).apply {
+                        setDataAndType(uri, mime)
+                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                    }
+                    if (intent.resolveActivity(packageManager) != null) {
+                        startActivity(intent)
+                    } else {
+                        AlertDialog.Builder(this@MainActivity)
+                            .setMessage("Não há nenhuma app instalada neste telemóvel para abrir este tipo de ficheiro.")
+                            .setPositiveButton("OK", null).show()
+                    }
+                } catch (e: Exception) {
+                    AlertDialog.Builder(this@MainActivity)
+                        .setMessage("Não foi possível abrir o ficheiro.")
+                        .setPositiveButton("OK", null).show()
+                }
+            }
+        }
+
+        @JavascriptInterface
         fun scanOdometer() {
             runOnUiThread {
                 try {

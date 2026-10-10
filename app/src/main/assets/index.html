@@ -47,6 +47,9 @@ button{cursor:pointer}
 .tag.bad{background:var(--badbg);color:var(--bad)}.tag.warn{background:var(--warnbg);color:var(--warn)}.tag.ok{background:var(--okbg);color:var(--ok)}
 .photos{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
 .photos img{width:60px;height:60px;object-fit:cover;border-radius:2px;cursor:zoom-in;border:1px solid var(--line)}
+.filechip{display:inline-flex;align-items:center;gap:4px;background:var(--bg);border:1px solid var(--line);border-radius:2px;padding:6px 10px;font-size:13px;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.predcard{background:var(--bg);border:1.5px dashed var(--line);border-radius:2px;padding:12px;margin-bottom:10px}
+.predbadge{display:inline-block;font-size:10px;font-weight:700;letter-spacing:.05em;color:var(--mut);border:1px solid var(--mut);border-radius:2px;padding:2px 6px;text-transform:uppercase;vertical-align:middle}
 .fab{position:fixed;right:16px;bottom:calc(16px + env(safe-area-inset-bottom,0px));box-shadow:0 2px 10px rgba(0,0,0,.25);clip-path:polygon(0 0,calc(100% - 16px) 0,100% 16px,100% 100%,0 100%);border-radius:2px;padding:14px 22px}
 .sheet{position:fixed;inset:0;background:rgba(10,14,13,.55);display:flex;align-items:flex-end;justify-content:center;z-index:5}
 .sheet form,.sheet .box{background:var(--card);width:100%;max-width:560px;max-height:92%;overflow:auto;overscroll-behavior:contain;border-radius:10px 10px 0 0;padding:18px 16px calc(18px + env(safe-area-inset-bottom,0px));border-top:3px solid var(--pri)}
@@ -265,7 +268,7 @@ function registos(v){
       <div style="text-align:right">${x.km?`<div class="num" style="font-size:15px">${fmtCounterN(x.km,unitOf(v))}</div>`:""}${x.cost?`<div class="mut">${fmtEur(x.cost)}</div>`:""}</div>
     </div>
     ${x.notes?`<p style="margin:8px 0 0;font-size:14px">${esc(x.notes)}</p>`:""}
-    ${(x.photos||[]).length?`<div class="photos">${x.photos.map((p,i)=>`<img src="${src(p)}" alt="Fotografia ${i+1}" onclick="zoom(this.src)">`).join("")}</div>`:""}
+    ${(x.photos||[]).length?`<div class="photos">${x.photos.map((p,i)=>attItem(p,i)).join("")}</div>`:""}
     <div class="acts" style="margin-top:10px"><button class="btn ghost sm" onclick="editRec('${x.id}')">Editar</button></div></div>`;
   return sel+years.map(y=>`<h3 style="margin:14px 0 6px;color:var(--mut);font-size:14px">${y}</h3>`+byYear[y].map(card).join("")).join("");
 }
@@ -298,19 +301,26 @@ function predictedAlerts(v){
   return out.sort((a,b)=>b.ratio-a.ratio);
 }
 function predCard(p,v){
-  const u=unitOf(v),c=["ok","warn","bad"][p.lvl];
+  const u=unitOf(v);
   const parts=[];
   if(p.kmSince!=null&&p.g.avgKm)parts.push(`${fmtCounterN(p.kmSince,u)} de ${fmtCounterN(p.g.avgKm,u)} habituais`);
   parts.push(`${fmtDays(p.daysSince)} de ${fmtDays(p.g.avgDays)} habituais`);
-  return `<div class="card"><div class="row"><div><strong>${esc(p.type)}</strong><div class="mut">${p.brand!=="—"?esc(p.brand):"Sem marca/modelo"}</div></div><span class="tag ${c}">${p.ratio>=1?"já passou a média":"a aproximar-se"}</span></div>
-  <div class="mut" style="margin-top:4px">${parts.join(" · ")} — baseado em ${p.g.n} troca${p.g.n>1?"s":""} anterior${p.g.n>1?"es":""}</div></div>`;
+  return `<div class="predcard"><div class="row"><div><span class="predbadge">Previsão</span> <strong style="margin-left:2px">${esc(p.type)}</strong><div class="mut" style="margin-top:2px">${p.brand!=="—"?esc(p.brand):"Sem marca/modelo"}</div></div></div>
+  <div class="mut" style="margin-top:6px">${p.ratio>=1?"Já passou a duração habitual":"A aproximar-se da duração habitual"}</div>
+  <div class="mut" style="margin-top:2px;font-size:12px">${parts.join(" · ")} · baseado em ${p.g.n} troca${p.g.n>1?"s":""} anterior${p.g.n>1?"es":""}</div></div>`;
 }
 function avisos(v){
   const l=allAlerts(v).map(a=>({a,i:alertInfo(a,v)})).sort((x,y)=>y.i.score-x.i.score);
   const preds=predictedAlerts(v);
-  return `<div class="acts" style="margin:0 0 12px"><button class="btn ghost" onclick="planSheet()">Plano de manutenção</button></div>`
-  +(preds.length?`<h3 style="margin:0 0 4px">Previsões por histórico</h3><p class="mut" style="margin:0 0 8px">Estimativa a partir de trocas anteriores — ainda não é um aviso formal do plano.</p>${preds.map(p=>predCard(p,v)).join("")}`:"")
-  +(l.length?l.map(x=>alertCard(x.a,x.i,unitOf(v))).join(""):`<div class="empty">Sem avisos. No plano de manutenção defines de quanto em quanto tempo ou km fazes cada intervenção; os avisos surgem depois de registares a última vez.</div>`);
+  let out=`<div class="acts" style="margin:0 0 12px"><button class="btn ghost" onclick="planSheet()">Plano de manutenção</button></div>`;
+  if(preds.length){
+    out+=`<h3 style="margin:0 0 2px;color:var(--mut)">🔮 Previsões por histórico</h3>
+    <p class="mut" style="margin:0 0 10px">Estimativa a partir de trocas anteriores — ainda não são avisos confirmados.</p>
+    ${preds.map(p=>predCard(p,v)).join("")}
+    <h3 style="margin:18px 0 8px;padding-top:10px;border-top:1px solid var(--line)">Avisos</h3>`;
+  }
+  out+=l.length?l.map(x=>alertCard(x.a,x.i,unitOf(v))).join(""):`<div class="empty">Sem avisos. No plano de manutenção defines de quanto em quanto tempo ou km fazes cada intervenção; os avisos surgem depois de registares a última vez.</div>`;
+  return out;
 }
 const TECH_CATS=[["capacidade","Capacidades"],["peca","Peças e referências"],["outro","Outros detalhes"]];
 const TECH_SUG={
@@ -355,6 +365,7 @@ function tecnico(v){
     const items=t.filter(x=>(x.cat||"outro")===cat);
     if(!items.length)return "";
     return `<h3 style="margin:16px 0 8px">${esc(label)}</h3>`+items.map(x=>`<div class="card"><div class="row"><div style="flex:1"><strong>${esc(x.label)}</strong><div style="margin-top:2px">${esc(x.value)||`<span class="mut">—</span>`}</div>${x.note?`<div class="mut" style="margin-top:4px">${esc(x.note)}</div>`:""}</div></div>
+    ${(x.photos||[]).length?`<div class="photos">${x.photos.map((p,i)=>attItem(p,i)).join("")}</div>`:""}
     <div class="acts" style="margin-top:10px"><button class="btn ghost sm" onclick="editTech('${x.id}')">Editar</button></div></div>`).join("");
   }).join("");
 }
@@ -368,7 +379,61 @@ function sheet(html,onsubmit){
 async function shrink(file){
   return new Promise(res=>{const im=new Image();im.onload=()=>{const s=Math.min(1,1000/Math.max(im.width,im.height));const c=document.createElement("canvas");c.width=im.width*s;c.height=im.height*s;c.getContext("2d").drawImage(im,0,0,c.width,c.height);URL.revokeObjectURL(im.src);res(c.toDataURL("image/jpeg",.7))};im.onerror=()=>res(null);im.src=URL.createObjectURL(file)});
 }
-async function files(form,name){const out=[];for(const f of form.querySelector(`[name=${name}]`).files){const u=await shrink(f);if(!u)continue;const id=uid()+uid();PH[id]=u;try{await tx("photos","readwrite",s=>s.put(u,id));out.push(id)}catch(e){delete PH[id];banner("Não foi possível guardar uma fotografia.")}}return out}
+async function readDoc(file){
+  if(file.size>8*1024*1024)return null;
+  return new Promise(res=>{const r=new FileReader();r.onload=()=>res(r.result);r.onerror=()=>res(null);r.readAsDataURL(file)});
+}
+// Guarda fotografias (reduzidas) e documentos (tal como estão). Cada anexo fica como {id,name,mime}.
+async function files(form,name){
+  const out=[];
+  for(const f of form.querySelector(`[name=${name}]`).files){
+    const isImg=f.type.startsWith("image/");
+    const u=isImg?await shrink(f):await readDoc(f);
+    if(!u){banner('Não foi possível guardar "'+f.name+'" (talvez seja grande demais).');continue}
+    const id=uid()+uid();PH[id]=u;
+    try{await tx("photos","readwrite",s=>s.put(u,id));out.push({id,name:f.name,mime:isImg?"image/jpeg":(f.type||"application/octet-stream")})}
+    catch(e){delete PH[id];banner('Não foi possível guardar "'+f.name+'".')}
+  }
+  return out;
+}
+function attItem(p,i){
+  const o=typeof p==="string"?{id:p,mime:"image/jpeg"}:p;
+  if((o.mime||"").startsWith("image/"))return `<img src="${src(o.id)}" alt="Anexo ${i+1}" onclick="zoom(this.src)">`;
+  return `<button type="button" class="filechip" onclick="openAtt('${o.id}','${esc(o.name||"documento").replace(/'/g,"&#39;")}')">📄 ${esc(o.name||"documento")}</button>`;
+}
+function openAtt(id,name){
+  if(window.Android&&Android.openDataUri){try{Android.openDataUri(src(id),name);return}catch(e){}}
+  const a=document.createElement("a");a.href=src(id);a.download=name;a.click();
+}
+// Gestor genérico de anexos: funciona com qualquer lista (registo, intervenção do plano, aviso, detalhe técnico).
+// `arr` é a referência direta ao array guardado (mutá-lo aqui já atualiza o item original).
+// `back` é a função a chamar para voltar ao ecrã de onde veio.
+let _attArr=null,_attBack=null;
+function manageAttachments(arr,back){
+  document.querySelectorAll(".sheet").forEach(s=>s.remove());
+  _attArr=arr;_attBack=back;
+  sheet(`<h2>Gerir anexos</h2>
+  ${arr&&arr.length?arr.map((p,i)=>{
+    const o=typeof p==="string"?{id:p,mime:"image/jpeg"}:p;
+    const isImg=(o.mime||"").startsWith("image/");
+    return `<div class="card"><div class="row" style="align-items:center">
+      ${isImg?`<img src="${src(o.id)}" style="width:52px;height:52px;object-fit:cover;border-radius:2px;cursor:zoom-in;flex:none" onclick="zoom(this.src)">`:`<button type="button" class="filechip" onclick="openAtt('${o.id}','${esc(o.name||"documento").replace(/'/g,"&#39;")}')">📄 ${esc(o.name||"documento")}</button>`}
+      <button type="button" class="btn del sm" onclick="delAttAt(${i})">Apagar</button>
+    </div></div>`;
+  }).join(""):`<div class="empty">Sem anexos.</div>`}
+  <div class="acts"><button type="button" class="btn ghost" onclick="_attBack&&_attBack()">‹ Voltar</button></div>`,()=>{});
+}
+function delAttAt(i){
+  if(!_attArr||!_attArr[i])return;
+  if(!confirm("Apagar este anexo?"))return;
+  _attArr.splice(i,1);
+  save();
+  manageAttachments(_attArr,_attBack);
+}
+function manageRecAtt(id){const v=cur(),x=(v.records||[]).find(r=>r.id===id);if(x)manageAttachments(x.photos=x.photos||[],()=>editRec(id))}
+function managePlanAtt(id){const v=cur(),p=(v.plan||[]).find(x=>x.id===id);if(p)manageAttachments(p.photos=p.photos||[],()=>editPlan(id))}
+function manageAlertAtt(id){const v=cur(),a=(v.alerts||[]).find(x=>x.id===id);if(a)manageAttachments(a.photos=a.photos||[],()=>editAlert(id))}
+function manageTechAtt(id){const v=cur(),t=(v.tech||[]).find(x=>x.id===id);if(t)manageAttachments(t.photos=t.photos||[],()=>editTech(id))}
 function editVeh(id){
   const v=S.vehicles.find(x=>x.id===id)||{};
   const unit=id?unitOf(v):"km";
@@ -481,8 +546,8 @@ function editRec(id,pre){
   <datalist id="brandlist">${allBrands().map(t=>`<option value="${esc(t)}">`).join("")}</datalist>
   <label style="display:flex;gap:10px;align-items:center;margin-top:14px"><input type="checkbox" name="oneoff" ${x.oneOff?"checked":""} style="width:22px;min-height:0"> Substituição pontual (ex.: defeito de fábrica) — não contar para previsões por histórico</label>
   <label>Notas (oficina, peças, referências…)</label><textarea name="notes" rows="3">${esc(x.notes)}</textarea>
-  ${ASSETS?`<label>Fotografias (recibos, peças, danos)</label><input name="ph" type="file" accept="image/*" multiple>`:""}
-  ${(x.photos||[]).length?`<div class="mut" style="margin-top:6px">${x.photos.length} fotografia(s) já guardada(s); novas serão adicionadas.</div>`:""}
+  ${ASSETS?`<label>Fotografias e documentos (recibos, peças, PDF…)</label><input name="ph" type="file" accept="image/*,application/pdf" multiple>`:""}
+  ${id&&(x.photos||[]).length?`<div class="acts" style="margin-top:6px"><button type="button" class="btn ghost sm" onclick="manageRecAtt('${id}')">Gerir ${x.photos.length} anexo${x.photos.length>1?"s":""}</button></div>`:""}
   <div class="acts"><button type="button" class="btn ghost" data-close>Cancelar</button><button class="btn">Guardar</button></div>
   ${id?`<div class="acts"><button type="button" class="btn del" onclick="delRec('${id}')">Apagar registo</button></div>`:""}`,
   async(f,form)=>{const ph=await files(form,"ph");const o=id?x:{id:uid(),photos:[]};
@@ -504,10 +569,17 @@ function editAlert(id){
   <div class="g2"><div><label>Até à data</label><input name="date" type="date" value="${a.date||""}"></div>${hasCounter?`<div><label>Aos ${u==="horas"?"horas":"km"}</label><input name="km" type="number" inputmode="numeric" placeholder="${(Number(v.km)||0)+(u==="horas"?250:10000)}" value="${a.km??""}"></div>`:""}</div>
   <p class="mut">${hasCounter?`Preenche a data, o contador ou ambos. O aviso dispara com o que chegar primeiro.`:`Define a data deste aviso.`}</p>
   <label>Lembrete (opcional)</label><input name="note" placeholder="Ex.: levar o livrete" value="${esc(a.note||"")}">
+  <label>Anexos (fotografia ou documento)</label>
+  ${id&&(a.photos||[]).length?`<div class="acts" style="margin-top:4px"><button type="button" class="btn ghost sm" onclick="manageAlertAtt('${id}')">Gerir ${a.photos.length} anexo${a.photos.length>1?"s":""}</button></div>`:""}
+  <input name="att" type="file" accept="image/*,application/pdf" multiple>
   <div class="acts"><button type="button" class="btn ghost" data-close>Cancelar</button><button class="btn">Guardar</button></div>
   ${id?`<div class="acts"><button type="button" class="btn del" onclick="delAlert('${id}')">Apagar aviso</button></div>`:""}`,
-  f=>{if(!f.get("date")&&!f.get("km")){alert(hasCounter?"Indica uma data ou um valor do contador.":"Indica uma data.");return}
-    const o=id?a:{id:uid()};Object.assign(o,{title:f.get("title"),date:f.get("date"),km:Number(f.get("km"))||0,note:(f.get("note")||"").trim()});if(!id)v.alerts.push(o);S.tab="avisos"});
+  async(f,form)=>{if(!f.get("date")&&!f.get("km")){alert(hasCounter?"Indica uma data ou um valor do contador.":"Indica uma data.");return}
+    const novos=await files(form,"att");
+    const o=id?a:{id:uid(),photos:[]};
+    Object.assign(o,{title:f.get("title"),date:f.get("date"),km:Number(f.get("km"))||0,note:(f.get("note")||"").trim()});
+    o.photos=[...(o.photos||[]),...novos];
+    if(!id)v.alerts.push(o);S.tab="avisos"});
 }
 function delAlert(id){const v=cur();v.alerts=v.alerts.filter(a=>a.id!==id);document.querySelector(".sheet")?.remove();render()}
 function techFieldList(cat){
@@ -557,10 +629,16 @@ function editTech(id){
   <datalist id="techlist">${techFieldList(cat0).map(t=>`<option value="${esc(t)}">`).join("")}</datalist>
   <label>Valor</label><input name="value" placeholder="Ex.: 4,3 L / 5W-30" value="${esc(x.value||"")}">
   <label>Nota (opcional — ex.: norma substituída, observações)</label><textarea name="note" rows="2">${esc(x.note||"")}</textarea>
+  <label>Anexos (fotografia ou documento)</label>
+  ${id&&(x.photos||[]).length?`<div class="acts" style="margin-top:4px"><button type="button" class="btn ghost sm" onclick="manageTechAtt('${id}')">Gerir ${x.photos.length} anexo${x.photos.length>1?"s":""}</button></div>`:""}
+  <input name="att" type="file" accept="image/*,application/pdf" multiple>
   <div class="acts"><button type="button" class="btn ghost" data-close>Cancelar</button><button class="btn">Guardar</button></div>
   ${id?`<div class="acts"><button type="button" class="btn del" onclick="delTech('${id}')">Apagar</button></div>`:""}`,
-  f=>{const label=(f.get("label")||"").trim();if(!label)return;
-    const o=id?x:{id:uid()};Object.assign(o,{cat:f.get("cat")||"outro",label,value:(f.get("value")||"").trim(),note:(f.get("note")||"").trim()});
+  async(f,form)=>{const label=(f.get("label")||"").trim();if(!label)return;
+    const novos=await files(form,"att");
+    const o=id?x:{id:uid(),photos:[]};
+    Object.assign(o,{cat:f.get("cat")||"outro",label,value:(f.get("value")||"").trim(),note:(f.get("note")||"").trim()});
+    o.photos=[...(o.photos||[]),...novos];
     if(!id)v.tech.push(o);});
 }
 function delTech(id){const v=cur();v.tech=(v.tech||[]).filter(t=>t.id!==id);document.querySelector(".sheet")?.remove();render()}
@@ -955,13 +1033,18 @@ function editPlan(id){
   <label>Última vez (só se ainda não tens registo)</label><div class="g2"><input name="lastDate" type="date" value="${p.lastDate||""}">${hasCounter?`<input name="lastKm" type="number" inputmode="numeric" placeholder="${u==="horas"?"horas":"km"}" value="${p.lastKm||""}">`:""}</div>
   <label>Lembrete para a próxima vez (opcional)</label><input name="note" placeholder="Ex.: rever nível das pastilhas de travão" value="${esc(p.note||"")}">
   <p class="mut">Só vale para a próxima vez: aparece junto deste aviso, passa para as notas do registo quando tocares em «Concluir», e depois limpa-se sozinho — não se repete nas vezes seguintes.</p>
+  <label>Anexos (fotografia ou documento — ex.: manual, folheto da peça)</label>
+  ${id&&(p.photos||[]).length?`<div class="acts" style="margin-top:4px"><button type="button" class="btn ghost sm" onclick="managePlanAtt('${id}')">Gerir ${p.photos.length} anexo${p.photos.length>1?"s":""}</button></div>`:""}
+  <input name="att" type="file" accept="image/*,application/pdf" multiple>
   <div class="acts"><button type="button" class="btn ghost" onclick="planSheet()">Cancelar</button><button class="btn">Guardar</button></div>
   ${id?`<div class="acts"><button type="button" class="btn del" onclick="delPlan('${id}')">Apagar intervenção</button></div>`:""}`,
-  f=>{const mode=hasCounter?f.get("mode"):"meses",name=(f.get("type")||"").trim();if(!name)return;
+  async(f,form)=>{const mode=hasCounter?f.get("mode"):"meses",name=(f.get("type")||"").trim();if(!name)return;
     const km=hasCounter&&mode!=="meses"?Number(f.get("km"))||0:0,months=mode!=="km"?Number(f.get("months"))||0:0;
     if(!km&&!months){alert("Indica "+(hasCounter?(u==="horas"?"horas, meses ou ambos.":"km, meses ou ambos."):"os meses.")); setTimeout(()=>editPlan(id),50);return}
-    const o=id?p:{id:uid()};
+    const novos=await files(form,"att");
+    const o=id?p:{id:uid(),photos:[]};
     Object.assign(o,{type:name,km,months,lastDate:f.get("lastDate"),lastKm:Number(f.get("lastKm"))||0,note:(f.get("note")||"").trim()});
+    o.photos=[...(o.photos||[]),...novos];
     if(!id){v.plan=v.plan||defPlan();v.plan.push(o)}setTimeout(planSheet,50)});
 }
 function delPlan(id){const v=cur();v.plan=v.plan.filter(p=>p.id!==id);render();planSheet()}
