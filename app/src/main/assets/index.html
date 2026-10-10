@@ -80,12 +80,35 @@ const idb=new Promise((res,rej)=>{const r=indexedDB.open("garagem",1);r.onupgrad
 async function tx(store,mode,fn){const d=await idb;return new Promise((res,rej)=>{const t=d.transaction(store,mode);const o=fn(t.objectStore(store));t.oncomplete=()=>res(o&&o.result);t.onerror=t.onabort=()=>rej(t.error)})}
 function banner(m,ok){const b=document.getElementById("bn");b.textContent=m;b.style.display=m?"block":"none";b.style.background=ok?"var(--okbg)":"var(--badbg)";b.style.color=ok?"var(--ok)":"var(--bad)"}
 function save(){q=q.then(persist)}
+// Recolhe todas as strings que aparecem nos dados (ids de anexos incluídos, em registos, plano, avisos, detalhe técnico, foto do ativo...).
+// Um anexo só é considerado "sem uso" se o seu id não aparecer em lado nenhum.
+function usedIds(){
+  const used=new Set();
+  (function walk(x){
+    if(typeof x==="string")used.add(x);
+    else if(Array.isArray(x))x.forEach(walk);
+    else if(x&&typeof x==="object")Object.values(x).forEach(walk);
+  })(S.vehicles);
+  return used;
+}
+// O ficheiro JSON é a fonte de verdade dos anexos: se a cópia interna não tiver alguma imagem, vai buscá-la ao ficheiro.
+async function restorePhotosFromFile(){
+  try{
+    if(!window.Android||!Android.hasFile())return false;
+    const j=JSON.parse(Android.readFile());
+    if(!j||j.app!=="garagem"||!j.photos)return false;
+    const used=usedIds(),add=[];
+    for(const [k,v] of Object.entries(j.photos)){if(!PH[k]&&used.has(k)){PH[k]=v;add.push([k,v])}}
+    if(add.length)await tx("photos","readwrite",st=>{add.forEach(([k,v])=>st.put(v,k))});
+    return add.length>0;
+  }catch(e){return false}
+}
 async function persist(){
   if(LOAD!=="ok")return;
   try{
     const j=cj(S.vehicles);if(j===lastJ)return;
     await tx("kv","readwrite",s=>s.put(S.vehicles,"vehicles"));lastJ=j;meta.changed=Date.now();await tx("kv","readwrite",s=>s.put(meta,"meta"));fileSync();
-    const used=new Set();S.vehicles.forEach(v=>{if(v.photo)used.add(v.photo);(v.records||[]).forEach(r=>(r.photos||[]).forEach(p=>used.add(p)))});
+    const used=usedIds();
     const dead=Object.keys(PH).filter(k=>!used.has(k));
     if(dead.length){await tx("photos","readwrite",s=>{dead.forEach(k=>s.delete(k))});dead.forEach(k=>delete PH[k])}
     banner("");
@@ -150,6 +173,7 @@ async function init(){
     const d=await idb;
     await new Promise(res=>{const c=d.transaction("photos").objectStore("photos").openCursor();c.onsuccess=()=>{const u=c.result;if(u){PH[u.key]=u.value;u.continue()}else res()};c.onerror=()=>res()});
     try{navigator.storage&&navigator.storage.persist&&navigator.storage.persist()}catch(e){}
+    await restorePhotosFromFile();
     LOAD="ok";render();
   }catch(e){LOAD="off";render()}
 }
