@@ -96,13 +96,18 @@ async function restorePhotosFromFile(){
   try{
     if(!window.Android||!Android.hasFile())return false;
     const j=JSON.parse(Android.readFile());
-    if(!j||j.app!=="garagem"||!j.photos)return false;
+    if(!j||j.app!=="garagem")return false;
+    if(!meta.alertCfg)await applySettings(j);
+    if(!j.photos)return false;
     const used=usedIds(),add=[];
     for(const [k,v] of Object.entries(j.photos)){if(!PH[k]&&used.has(k)){PH[k]=v;add.push([k,v])}}
     if(add.length)await tx("photos","readwrite",st=>{add.forEach(([k,v])=>st.put(v,k))});
     return add.length>0;
   }catch(e){return false}
 }
+function fileData(){return{app:"garagem",version:1,saved:new Date().toISOString(),vehicles:S.vehicles,photos:PH,settings:{alerts:alertCfg()}}}
+async function saveMeta(){try{await tx("kv","readwrite",s=>s.put(meta,"meta"))}catch(e){}fileSync()}
+async function applySettings(j){if(j&&j.settings&&j.settings.alerts){meta.alertCfg=j.settings.alerts;try{await tx("kv","readwrite",s=>s.put(meta,"meta"))}catch(e){}}}
 async function persist(){
   if(LOAD!=="ok")return;
   try{
@@ -114,7 +119,7 @@ async function persist(){
     banner("");
   }catch(e){banner("Não foi possível guardar neste telemóvel. Exporta já uma cópia de segurança.")}
 }
-async function applyData(j){Object.keys(PH).forEach(k=>delete PH[k]);Object.assign(PH,j.photos||{});S.vehicles=j.vehicles;S.sel=null;await tx("photos","readwrite",s=>{s.clear();Object.entries(PH).forEach(([k,v])=>s.put(v,k))});await tx("kv","readwrite",s=>s.put(S.vehicles,"vehicles"));lastJ=cj(S.vehicles)}
+async function applyData(j){Object.keys(PH).forEach(k=>delete PH[k]);Object.assign(PH,j.photos||{});S.vehicles=j.vehicles;S.sel=null;await tx("photos","readwrite",s=>{s.clear();Object.entries(PH).forEach(([k,v])=>s.put(v,k))});await tx("kv","readwrite",s=>s.put(S.vehicles,"vehicles"));lastJ=cj(S.vehicles);await applySettings(j)}
 
 // --- Ficheiro de dados no Android: a app grava sempre no mesmo ficheiro que o utilizador escolheu ---
 let fsT=null;
@@ -123,7 +128,7 @@ function fileSync(now){
   clearTimeout(fsT);
   fsT=setTimeout(()=>{
     try{
-      const ok=Android.saveFile(JSON.stringify({app:"garagem",version:1,saved:new Date().toISOString(),vehicles:S.vehicles,photos:PH}));
+      const ok=Android.saveFile(JSON.stringify(fileData()));
       if(ok){meta.lastBackup=Date.now();tx("kv","readwrite",s=>s.put(meta,"meta")).catch(()=>{});banner("Guardado no ficheiro às "+new Date().toLocaleTimeString("pt-PT",{hour:"2-digit",minute:"2-digit"}),true);setTimeout(()=>banner(""),2000)}
       else banner("Não foi possível escrever no ficheiro. Escolhe-o outra vez em Cópia.");
     }catch(e){banner("Erro ao escrever no ficheiro.")}
@@ -153,7 +158,7 @@ window.onAndroidFile=async mode=>{
 async function autoBackup(){
   if(window.Android||!S.vehicles.length)return;
   if(meta.auto!==true)return;
-  const data=JSON.stringify({app:"garagem",version:1,saved:new Date().toISOString(),vehicles:S.vehicles,photos:PH});
+  const data=JSON.stringify(fileData());
   const stamp=()=>{meta.lastBackup=Date.now();tx("kv","readwrite",s=>s.put(meta,"meta")).catch(()=>{})};
   if(fh){
     try{
@@ -214,7 +219,8 @@ function alertInfo(a,v){
       }
     }
   }
-  return{lvl,days,kmL,txt:txt.join(" · "),score:lvl*1e6-(days??999)}
+  const sn=!!(a.snoozeUntil&&a.snoozeUntil>today());
+  return{lvl,days,kmL,txt:txt.join(" · "),snoozed:sn,score:(sn?-1e9:0)+lvl*1e6-(days??999)}
 }
 function render(){
   if(LOAD==="loading"){$("#app").innerHTML=`<div class="empty">A carregar a tua garagem…</div>`;return}
@@ -225,7 +231,7 @@ function render(){
 }
 const src=p=>p?(PH[p]||""):"";
 const thumb=v=>v.photo?`<img class="thumb" src="${src(v.photo)}" alt="">`:`<div class="thumb">🚗</div>`;
-const near=(a,v)=>{const i=alertInfo(a,v);return((i.days!==null&&i.days<=60)||(i.kmL!==null&&i.kmL<=2000))?i:null};
+const near=(a,v)=>{const i=alertInfo(a,v);if(i.snoozed)return null;return((i.days!==null&&i.days<=60)||(i.kmL!==null&&i.kmL<=2000))?i:null};
 const openV=id=>{S.sel=id;S.tab="resumo";render()};
 let heroStartX=null,heroStartY=null;
 function heroTouchStart(e){const t=e.touches[0];heroStartX=t.clientX;heroStartY=t.clientY}
@@ -239,8 +245,9 @@ function heroTouchEnd(e){
   render();
 }
 function listView(){
+  const nActAll=S.vehicles.reduce((t,v)=>t+allAlerts(v).filter(a=>isActive(a,v)).length,0);
   const n=S.vehicles.reduce((s,v)=>s+allAlerts(v).filter(a=>near(a,v)).length,0);
-  return `<div class="top"><h1><span class="brand">RT</span>RLTecAuto</h1><div style="display:flex;gap:6px">${S.vehicles.length>1?`<button class="btn ghost sm" onclick="compareAssets()">Comparar</button>`:""}<button class="btn ghost sm" onclick="backup()">Cópia</button></div></div>
+  return `<div class="top"><h1><span class="brand">RT</span>RLTecAuto</h1><div style="display:flex;gap:6px">${S.vehicles.length>1?`<button class="btn ghost sm" onclick="compareAssets()">Comparar</button>`:""}<button class="btn ghost sm" onclick="alarmCenter()">🔔${nActAll?" "+nActAll:""}</button><button class="btn ghost sm" onclick="backup()">Cópia</button></div></div>
   ${bkNote()}
   ${n?`<p class="mut" style="margin:0 0 12px">${n} aviso${n>1?"s":""} nos próximos 2 meses (ou a menos de 2 000 km)</p>`:""}
   ${S.vehicles.length?S.vehicles.map(vcard).join(""):`<div class="empty">Ainda não tens nenhum ativo.<br>Adiciona o primeiro para começar a registar.</div>`}
@@ -297,10 +304,11 @@ function registos(v){
   return sel+years.map(y=>`<h3 style="margin:14px 0 6px;color:var(--mut);font-size:14px">${y}</h3>`+byYear[y].map(card).join("")).join("");
 }
 function alertCard(a,i,u){
-  u=u||"km";
+  u=u||"km";const vid=S.sel;
   const c=["ok","warn","bad"][i.lvl];
-  return `<div class="card"><div class="row"><div><strong>${esc(a.title)}</strong><div class="mut">${a.date?"Data: "+fmtD(a.date):""}${a.date&&a.km?" · ":""}${a.km?"Aos "+fmtCounterN(a.km,u):""}</div>${a.note?`<div class="mut" style="margin-top:3px">💡 ${esc(a.note)}</div>`:""}</div><span class="tag ${c}">${i.txt}</span></div>
-  <div class="acts" style="margin-top:10px"><button class="btn sm" onclick="doneAlert('${a.id}')">Concluir</button><button class="btn ghost sm" onclick="${a.derived?`editPlan('${a.planId}')`:`editAlert('${a.id}')`}">Editar</button></div></div>`;
+  const extra=[i.snoozed?`💤 adiado até ${fmtD(a.snoozeUntil)}`:"",a.mute?"🔕 sem notificações":"",a.leadDays!=null?`⏰ avisa ${a.leadDays} dias antes`:""].filter(Boolean).join(" · ");
+  return `<div class="card"${i.snoozed?' style="opacity:.75"':""}><div class="row"><div><strong>${esc(a.title)}</strong><div class="mut">${a.date?"Data: "+fmtD(a.date):""}${a.date&&a.km?" · ":""}${a.km?"Aos "+fmtCounterN(a.km,u):""}</div>${a.note?`<div class="mut" style="margin-top:3px">💡 ${esc(a.note)}</div>`:""}${extra?`<div class="mut" style="margin-top:3px;font-size:12px">${extra}</div>`:""}</div><span class="tag ${c}">${i.txt}</span></div>
+  <div class="acts" style="margin-top:10px;flex-wrap:wrap"><button class="btn sm" onclick="doneAlert('${a.id}')">Concluir</button><button class="btn ghost sm" onclick="manageAlert('${vid}','${a.id}')">Gerir</button><button class="btn ghost sm" onclick="${a.derived?`editPlan('${a.planId}')`:`editAlert('${a.id}')`}">Editar</button></div></div>`;
 }
 // Para cada tipo de registo, olha para a última ocorrência (ainda "em serviço") e compara
 // o tempo/km já passados com a duração média das trocas anteriores do mesmo tipo+marca.
@@ -336,7 +344,9 @@ function predCard(p,v){
 function avisos(v){
   const l=allAlerts(v).map(a=>({a,i:alertInfo(a,v)})).sort((x,y)=>y.i.score-x.i.score);
   const preds=predictedAlerts(v);
-  let out=`<div class="acts" style="margin:0 0 12px"><button class="btn ghost" onclick="planSheet()">Plano de manutenção</button></div>`;
+  const nAct=l.filter(x=>isActive(x.a,v)).length,nSn=l.filter(x=>x.i.snoozed).length;
+  let out=`<div class="acts" style="margin:0 0 8px;flex-wrap:wrap"><button class="btn ghost" onclick="planSheet()">Plano de manutenção</button><button class="btn ghost" onclick="alarmCenter()">🔔 Alarmes</button></div>
+  <p class="mut" style="margin:0 0 12px">${nAct} ativo${nAct===1?"":"s"}${nSn?` · ${nSn} adiado${nSn>1?"s":""}`:""}</p>`;
   if(preds.length){
     out+=`<h3 style="margin:0 0 2px;color:var(--mut)">🔮 Previsões por histórico</h3>
     <p class="mut" style="margin:0 0 10px">Estimativa a partir de trocas anteriores — ainda não são avisos confirmados.</p>
@@ -432,11 +442,12 @@ function openAtt(id,name){
 // Gestor genérico de anexos: funciona com qualquer lista (registo, intervenção do plano, aviso, detalhe técnico).
 // `arr` é a referência direta ao array guardado (mutá-lo aqui já atualiza o item original).
 // `back` é a função a chamar para voltar ao ecrã de onde veio.
-let _attArr=null,_attBack=null;
-function manageAttachments(arr,back){
-  document.querySelectorAll(".sheet").forEach(s=>s.remove());
-  _attArr=arr;_attBack=back;
-  sheet(`<h2>Gerir anexos</h2>
+let _attArr=null,_attSheet=null;
+// A janela de anexos abre POR CIMA do formulário de edição (não o fecha), para não perder o que já foi escrito.
+function manageAttachments(arr){
+  _attSheet&&_attSheet.remove();
+  _attArr=arr;
+  _attSheet=sheet(`<h2>Gerir anexos</h2>
   ${arr&&arr.length?arr.map((p,i)=>{
     const o=typeof p==="string"?{id:p,mime:"image/jpeg"}:p;
     const isImg=(o.mime||"").startsWith("image/");
@@ -445,19 +456,29 @@ function manageAttachments(arr,back){
       <button type="button" class="btn del sm" onclick="delAttAt(${i})">Apagar</button>
     </div></div>`;
   }).join(""):`<div class="empty">Sem anexos.</div>`}
-  <div class="acts"><button type="button" class="btn ghost" onclick="_attBack&&_attBack()">‹ Voltar</button></div>`,()=>{});
+  <div class="acts"><button type="button" class="btn ghost" data-close>Concluído</button></div>`,()=>{});
+  // ao fechar esta janela (Concluído ou toque fora) só se remove a própria janela
+}
+function refreshAttButtons(){
+  const n=_attArr?_attArr.length:0;
+  document.querySelectorAll('.sheet button[onclick^="manage"][onclick*="Att("]').forEach(b=>{
+    if(!n){b.parentElement.remove();return}
+    b.textContent="Gerir "+n+" anexo"+(n>1?"s":"");
+  });
 }
 function delAttAt(i){
   if(!_attArr||!_attArr[i])return;
   if(!confirm("Apagar este anexo?"))return;
   _attArr.splice(i,1);
   save();
-  manageAttachments(_attArr,_attBack);
+  refreshAttButtons();
+  if(!_attArr.length&&_attSheet){_attSheet.remove();_attSheet=null;return}  // sem anexos: volta direto ao formulário
+  manageAttachments(_attArr);
 }
-function manageRecAtt(id){const v=cur(),x=(v.records||[]).find(r=>r.id===id);if(x)manageAttachments(x.photos=x.photos||[],()=>editRec(id))}
-function managePlanAtt(id){const v=cur(),p=(v.plan||[]).find(x=>x.id===id);if(p)manageAttachments(p.photos=p.photos||[],()=>editPlan(id))}
-function manageAlertAtt(id){const v=cur(),a=(v.alerts||[]).find(x=>x.id===id);if(a)manageAttachments(a.photos=a.photos||[],()=>editAlert(id))}
-function manageTechAtt(id){const v=cur(),t=(v.tech||[]).find(x=>x.id===id);if(t)manageAttachments(t.photos=t.photos||[],()=>editTech(id))}
+function manageRecAtt(id){const v=cur(),x=(v.records||[]).find(r=>r.id===id);if(x)manageAttachments(x.photos=x.photos||[])}
+function managePlanAtt(id){const v=cur(),p=(v.plan||[]).find(x=>x.id===id);if(p)manageAttachments(p.photos=p.photos||[])}
+function manageAlertAtt(id){const v=cur(),a=(v.alerts||[]).find(x=>x.id===id);if(a)manageAttachments(a.photos=a.photos||[])}
+function manageTechAtt(id){const v=cur(),t=(v.tech||[]).find(x=>x.id===id);if(t)manageAttachments(t.photos=t.photos||[])}
 function editVeh(id){
   const v=S.vehicles.find(x=>x.id===id)||{};
   const unit=id?unitOf(v):"km";
@@ -578,6 +599,8 @@ function editRec(id,pre){
     Object.assign(o,{type:(f.get("type")||"").trim(),date:f.get("date"),km:Number(f.get("km"))||0,cost:Number(f.get("cost"))||0,brand:(f.get("brand")||"").trim(),oneOff:!!f.get("oneoff"),notes:f.get("notes")});o.photos=[...(o.photos||[]),...ph];
     if(!id){
       v.records.push(o);
+      if(pre?.fromAlert&&v.alertPrefs)delete v.alertPrefs[pre.fromAlert];
+      resetPlanPrefs(v,o.type);
       if(pre?.fromAlert)v.alerts=v.alerts.filter(a=>a.id!==pre.fromAlert);
       if(pre?.clearPlanNote){const pl=(v.plan||[]).find(x=>x.id===pre.clearPlanNote);if(pl)pl.note=""}
       if(confirm('Registo guardado. Queres aproveitar a mesma data'+(unitOf(v)!=="none"?"/"+(unitOf(v)==="horas"?"horas":"km"):"")+' para registar outra tarefa feita ao mesmo tempo (ex.: óleo de travões)?'))
@@ -605,7 +628,83 @@ function editAlert(id){
     o.photos=[...(o.photos||[]),...novos];
     if(!id)v.alerts.push(o);S.tab="avisos"});
 }
-function delAlert(id){const v=cur();v.alerts=v.alerts.filter(a=>a.id!==id);document.querySelector(".sheet")?.remove();render()}
+let _acRefresh=null;
+function alertsChanged(){render();try{_acRefresh&&_acRefresh()}catch(e){}}
+function quickSnooze(vid,id,days,months){const v=S.vehicles.find(x=>x.id===vid);if(!v)return;setPref(v,id,{snoozeUntil:addDaysISO(days,months)});alertsChanged()}
+function resumeAlert(vid,id){const v=S.vehicles.find(x=>x.id===vid);if(!v)return;setPref(v,id,{snoozeUntil:null});alertsChanged()}
+function snoozeAll(days,months){
+  const until=addDaysISO(days,months);let n=0;
+  S.vehicles.forEach(v=>allAlerts(v).forEach(a=>{if(isActive(a,v)){setPref(v,a.id,{snoozeUntil:until});n++}}));
+  if(n)alertsChanged();
+}
+function manageAlert(vid,id){
+  const v=S.vehicles.find(x=>x.id===vid);if(!v)return;
+  const a=allAlerts(v).find(x=>x.id===id);if(!a)return;
+  const u=unitOf(v),hasC=u!=="none",cg=alertCfg(),i=alertInfo(a,v),p=prefsOf(v,id),ul=u==="horas"?"horas":"km";
+  const raw=a.derived?planAlerts(v).find(x=>x.id===id):null;
+  const d=sheet(`<h2>${esc(a.title)}</h2>
+  <p class="mut" style="margin:0 0 4px">${esc(v.name)} · ${i.txt||"sem data"}${i.snoozed?` · 💤 adiado até ${fmtD(a.snoozeUntil)}`:""}</p>
+  <h3 style="margin:14px 0 6px">Adiar</h3>
+  <div class="acts" style="flex-wrap:wrap;margin:0">
+    <button type="button" class="btn ghost sm" data-sn="1">+1 dia</button><button type="button" class="btn ghost sm" data-sn="3">+3 dias</button><button type="button" class="btn ghost sm" data-sn="7">+1 semana</button><button type="button" class="btn ghost sm" data-sn="m1">+1 mês</button>
+    ${i.snoozed?`<button type="button" class="btn sm" id="resm">Retomar já</button>`:""}
+  </div>
+  <label>Adiar até (volta a avisar nesse dia)</label><div class="g2"><input name="sdate" type="date" min="${addDaysISO(1)}" value="${i.snoozed?a.snoozeUntil:""}"><button type="button" class="btn ghost sm" id="sdb">Adiar até à data</button></div>
+  <h3 style="margin:18px 0 6px">Nova data do aviso</h3>
+  <div class="g2"><div><label>Data limite</label><input name="ndate" type="date" value="${a.date||""}"></div>${hasC?`<div><label>Aos ${ul}</label><input name="nkm" type="number" inputmode="numeric" value="${a.km||""}"></div>`:""}</div>
+  ${a.derived?`<p class="mut">Vem do plano de manutenção. Esta alteração vale só até registares a intervenção.${p.date||p.km?` <button type="button" class="btn ghost sm" id="repm">Repor valores do plano</button>`:""}</p>`:""}
+  <h3 style="margin:18px 0 6px">Antecedência do alerta</h3>
+  <div class="g2"><div><label>Dias antes</label><input name="ld" type="number" inputmode="numeric" min="0" placeholder="geral: ${cg.leadDays}" value="${a.leadDays??""}"></div>${hasC?`<div><label>${ul} antes</label><input name="lk" type="number" inputmode="numeric" min="0" placeholder="geral: ${cg.leadKm}" value="${a.leadKm??""}"></div>`:""}</div>
+  <label style="display:flex;gap:10px;align-items:center;margin-top:14px"><input type="checkbox" name="mute" ${a.mute?"checked":""} style="width:22px;min-height:0"> Não enviar notificações deste aviso</label>
+  <div class="acts"><button type="button" class="btn ghost" data-close>Cancelar</button><button class="btn">Guardar</button></div>
+  <div class="acts"><button type="button" class="btn ghost" id="donem">Concluir</button><button type="button" class="btn ghost" id="edm">Editar</button></div>`,
+  async f=>{
+    const nd=f.get("ndate")||"",nk=Number(f.get("nkm"))||0;
+    if(!nd&&!nk){alert(hasC?"Indica uma data ou um valor do contador.":"Indica uma data.");throw new Error("cancel")}
+    if(a.derived){setPref(v,id,{date:nd!==(raw.date||"")?nd:null,km:nk!==(raw.km||0)?nk:null})}
+    else{const m=(v.alerts||[]).find(x=>x.id===id);if(m){m.date=nd;m.km=nk}}
+    const num=k=>f.get(k)===null||f.get(k)===""?null:Math.max(0,Number(f.get(k))||0);
+    setPref(v,id,{leadDays:num("ld"),leadKm:num("lk"),mute:!!f.get("mute")});
+    try{_acRefresh&&_acRefresh()}catch(e){}
+  });
+  const done=()=>{d.remove();alertsChanged()};
+  d.querySelectorAll("[data-sn]").forEach(b=>b.onclick=()=>{const k=b.dataset.sn;setPref(v,id,{snoozeUntil:k==="m1"?addDaysISO(0,1):addDaysISO(Number(k))});done()});
+  d.querySelector("#sdb").onclick=()=>{const x=d.querySelector('[name=sdate]').value;if(!x||x<=today()){alert("Escolhe uma data depois de hoje.");return}setPref(v,id,{snoozeUntil:x});done()};
+  d.querySelector("#resm")?.addEventListener("click",()=>{setPref(v,id,{snoozeUntil:null});done()});
+  d.querySelector("#repm")?.addEventListener("click",()=>{setPref(v,id,{date:null,km:null});done()});
+  d.querySelector("#donem").onclick=()=>{d.remove();S.sel=vid;doneAlert(id)};
+  d.querySelector("#edm").onclick=()=>{d.remove();S.sel=vid;a.derived?editPlan(a.planId):editAlert(id)};
+}
+function acList(){
+  const act=[],snz=[];
+  S.vehicles.forEach(v=>allAlerts(v).forEach(a=>{
+    const i=alertInfo(a,v);
+    if(i.snoozed)snz.push({v,a,i});else if(isActive(a,v))act.push({v,a,i});
+  }));
+  act.sort((x,y)=>y.i.score-x.i.score);
+  const row=(x,sn)=>`<div class="card"><div class="row"><div style="flex:1;min-width:0"><strong>${esc(x.a.title)}</strong><div class="mut">${esc(x.v.name)}${x.a.mute?" · 🔕":""}${sn?" · 💤 até "+fmtD(x.a.snoozeUntil):""}</div></div><span class="tag ${["ok","warn","bad"][x.i.lvl]}">${x.i.txt}</span></div>
+  <div class="acts" style="margin-top:8px;flex-wrap:wrap">${sn?`<button type="button" class="btn sm" onclick="resumeAlert('${x.v.id}','${x.a.id}')">Retomar</button>`:`<button type="button" class="btn ghost sm" onclick="quickSnooze('${x.v.id}','${x.a.id}',1)">+1 dia</button><button type="button" class="btn ghost sm" onclick="quickSnooze('${x.v.id}','${x.a.id}',7)">+1 semana</button>`}<button type="button" class="btn ghost sm" onclick="manageAlert('${x.v.id}','${x.a.id}')">Gerir</button></div></div>`;
+  return `<h3 style="margin:16px 0 8px">🔔 Ativos (${act.length})</h3>
+  ${act.length?`<div class="acts" style="flex-wrap:wrap;margin:0 0 8px"><button type="button" class="btn ghost sm" onclick="snoozeAll(1)">Adiar todos 1 dia</button><button type="button" class="btn ghost sm" onclick="snoozeAll(7)">Adiar todos 1 semana</button></div>`+act.map(x=>row(x,false)).join(""):`<div class="empty">Nenhum aviso ativo neste momento.</div>`}
+  ${snz.length?`<h3 style="margin:16px 0 8px">💤 Adiados (${snz.length})</h3>`+snz.map(x=>row(x,true)).join(""):""}`;
+}
+function alarmCenter(){
+  const c=alertCfg();
+  const d=sheet(`<h2>Alarmes</h2>
+  <label style="display:flex;gap:10px;align-items:center;margin-top:6px"><input type="checkbox" name="on" ${c.on?"checked":""} style="width:22px;min-height:0"> Notificações ligadas (também com a app fechada)</label>
+  <div class="g2"><div><label>Avisar com (dias)</label><input name="ld" type="number" inputmode="numeric" min="0" value="${c.leadDays}"></div><div><label>Avisar com (km/horas)</label><input name="lk" type="number" inputmode="numeric" min="0" value="${c.leadKm}"></div></div>
+  <div class="g2"><div><label>Repetir lembrete (dias)</label><input name="rd" type="number" inputmode="numeric" min="1" value="${c.repeatDays}"></div><div><label>Notificar a partir das (h)</label><input name="hr" type="number" inputmode="numeric" min="0" max="23" value="${c.hour}"></div></div>
+  <p class="mut">Valores gerais. Cada aviso pode ter a sua própria antecedência em Gerir.</p>
+  <div id="acList">${acList()}</div>
+  <div class="acts"><button type="button" class="btn ghost" data-close>Fechar</button><button class="btn">Guardar definições</button></div>`,
+  async f=>{
+    const n=(k,def,min)=>{const x=f.get(k);return x===null||x===""?def:Math.max(min,Number(x)||0)};
+    meta.alertCfg={on:!!f.get("on"),leadDays:n("ld",ALERT_DEF.leadDays,0),leadKm:n("lk",ALERT_DEF.leadKm,0),repeatDays:n("rd",ALERT_DEF.repeatDays,1),hour:Math.min(23,n("hr",ALERT_DEF.hour,0))};
+    await saveMeta();
+  });
+  _acRefresh=()=>{const el=d.querySelector("#acList");if(el&&d.isConnected)el.innerHTML=acList()};
+}
+function delAlert(id){const v=cur();v.alerts=v.alerts.filter(a=>a.id!==id);if(v.alertPrefs)delete v.alertPrefs[id];document.querySelector(".sheet")?.remove();render()}
 function techFieldList(cat){
   const base=TECH_SUG[cat]||[];
   const removed=(meta.techRemoved&&meta.techRemoved[cat])||[];
@@ -740,7 +839,29 @@ function planAlerts(v){
     return{id:"plan:"+p.id,title:p.type,derived:true,planId:p.id,date,km,note:p.note||"",none:!date&&!km};
   });
 }
-const allAlerts=v=>[...(v.alerts||[]),...planAlerts(v).filter(a=>!a.none)];
+const ALERT_DEF={on:true,leadDays:14,leadKm:500,repeatDays:1,hour:9};
+const alertCfg=()=>({...ALERT_DEF,...(meta.alertCfg||{})});
+const prefsOf=(v,id)=>(v.alertPrefs&&v.alertPrefs[id])||{};
+function setPref(v,id,patch){
+  v.alertPrefs=v.alertPrefs||{};
+  const p={...(v.alertPrefs[id]||{}),...patch};
+  Object.keys(p).forEach(k=>{if(p[k]===null||p[k]===undefined||p[k]===""||p[k]===false)delete p[k]});
+  if(Object.keys(p).length)v.alertPrefs[id]=p;else delete v.alertPrefs[id];
+}
+function withPrefs(a,v){
+  const p=prefsOf(v,a.id),o=a.derived?a:{...a};
+  if(a.derived){if(p.date)o.date=p.date;if(p.km)o.km=Number(p.km);o.none=!o.date&&!o.km}
+  o.snoozeUntil=p.snoozeUntil;o.leadDays=p.leadDays;o.leadKm=p.leadKm;o.mute=!!p.mute;
+  return o;
+}
+const allAlerts=v=>[...(v.alerts||[]),...planAlerts(v)].map(a=>withPrefs(a,v)).filter(a=>!a.none);
+function isActive(a,v){
+  const c=alertCfg(),i=alertInfo(a,v);if(i.snoozed)return false;
+  const ld=a.leadDays!=null?Number(a.leadDays):c.leadDays,lk=a.leadKm!=null?Number(a.leadKm):c.leadKm;
+  return (i.days!==null&&i.days<=ld)||(i.kmL!==null&&i.kmL<=lk);
+}
+function addDaysISO(n,months){const d=new Date(today()+"T12:00");if(months)d.setMonth(d.getMonth()+months);else d.setDate(d.getDate()+n);return d.toISOString().slice(0,10)}
+function resetPlanPrefs(v,type){(v.plan||[]).filter(p=>normType(p.type)===normType(type)).forEach(p=>setPref(v,"plan:"+p.id,{snoozeUntil:null,date:null,km:null}))}
 function baseTypes(){
   const removed=meta.typesRemoved||[],custom=meta.typesCustom||[];
   const out=TYPES.filter(t=>!removed.includes(t));
@@ -1098,7 +1219,7 @@ function backup(){
     d.querySelector("#afl")?.addEventListener("click",()=>loadFromFile(say,d));
   }
   d.querySelector("#ex").onclick=async()=>{
-    const name="garagem-"+today()+".json",blob=new Blob([JSON.stringify({app:"garagem",version:1,vehicles:S.vehicles,photos:PH})],{type:"application/json"}),f=new File([blob],name,{type:"application/json"});
+    const name="garagem-"+today()+".json",blob=new Blob([JSON.stringify(fileData())],{type:"application/json"}),f=new File([blob],name,{type:"application/json"});
     try{
       if(navigator.canShare&&navigator.canShare({files:[f]}))await navigator.share({files:[f],title:"Garagem"});else throw 0;
     }catch(e){
@@ -1114,7 +1235,7 @@ function backup(){
       if(!confirm("Substituir todos os dados deste telemóvel pelos do ficheiro?"))return;
       Object.keys(PH).forEach(k=>delete PH[k]);Object.assign(PH,j.photos||{});S.vehicles=j.vehicles;S.sel=null;
       await tx("photos","readwrite",s=>{s.clear();Object.entries(PH).forEach(([k,v])=>s.put(v,k))});
-      await tx("kv","readwrite",s=>s.put(S.vehicles,"vehicles"));lastJ=cj(S.vehicles);
+      await tx("kv","readwrite",s=>s.put(S.vehicles,"vehicles"));lastJ=cj(S.vehicles);await applySettings(j);
       d.remove();render();
     }catch(x){alert("Ficheiro inválido.")}
   };
