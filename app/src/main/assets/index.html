@@ -501,7 +501,9 @@ function editVeh(id){
       const t=assetTypes().find(x=>x.key===f.get("atype"))||assetTypes()[0];
       o={id:uid(),created:Date.now(),records:[],alerts:[],plan:mkPlan(t.plan),tech:[],assetType:t.key,unit:t.unit};
     }
+    const oldKm=Number(o.km)||0;
     Object.assign(o,{name:f.get("name"),plate:f.get("plate"),year:f.get("year"),km:unitOf(o)==="none"?0:(Number(f.get("km"))||0)});
+    if(unitOf(o)!=="none"&&o.km>0&&o.km!==oldKm)logKm(o,o.km);
     if(p[0])o.photo=p[0];
     if(!id){S.vehicles.push(o);S.sel=o.id;S.tab="resumo"}
   });
@@ -534,6 +536,12 @@ function delKmLog(i){
   document.querySelectorAll(".sheet").forEach(s=>s.remove());
   kmLogView();
 }
+// Regista no histórico (kmLog) o valor do contador com a data de hoje; é a data que o relatório anual usa.
+function logKm(v,n){
+  if(!(n>0))return;
+  v.kmLog=v.kmLog||[];const t=today(),ex=v.kmLog.find(x=>x.date===t);
+  if(ex)ex.km=Math.max(ex.km,n);else v.kmLog.push({date:t,km:n});
+}
 function editKm(){
   const v=cur(),u=unitOf(v),unitLabel=UNIT_NAME[u]||"Quilómetros";
   const d=sheet(`<h2 style="font-size:19px">Atualizar ${unitLabel.toLowerCase()}</h2>
@@ -544,8 +552,7 @@ function editKm(){
   <label style="margin-top:10px">${unitLabel} atuais</label><input name="km" type="number" inputmode="numeric" min="0" required value="${v.km||""}">
   <div class="acts"><button type="button" class="btn ghost" data-close>Cancelar</button><button class="btn">Guardar</button></div>
   <div class="acts"><button type="button" class="btn ghost sm" onclick="kmLogView()">Ver / corrigir histórico de valores</button></div>`,
-  f=>{const n=Number(f.get("km"))||0;if(n<(v.km||0)&&!confirm("O valor é inferior ao atual. Guardar mesmo assim?"))return;v.km=n;
-    v.kmLog=v.kmLog||[];const t=today(),ex=v.kmLog.find(x=>x.date===t);if(ex)ex.km=Math.max(ex.km,n);else v.kmLog.push({date:t,km:n});});
+  f=>{const n=Number(f.get("km"))||0;if(n<(v.km||0)&&!confirm("O valor é inferior ao atual. Guardar mesmo assim?"))return;v.km=n;logKm(v,n)});
   const $d=s=>d.querySelector(s),cam=$d("#kmcam"),m=$d("#kmmsg"),inp=$d("[name=km]"),cands=$d("#kmcands");
   const curKm=Number(v.km)||0;
   if(!cam)return;
@@ -881,16 +888,23 @@ function annualKm(v){
   const byDate={};
   (v.records||[]).forEach(r=>{if(Number(r.km)>0&&r.date){if(!byDate[r.date]||r.km>byDate[r.date])byDate[r.date]=Number(r.km)}});
   (v.kmLog||[]).forEach(e=>{if(Number(e.km)>0&&e.date){if(!byDate[e.date]||e.km>byDate[e.date])byDate[e.date]=Number(e.km)}});
-  byDate[today()]=Math.max(byDate[today()]||0,Number(v.km)||0);
-  const arr=Object.entries(byDate).map(([d,k])=>({d,k})).sort((a,b)=>a.d.localeCompare(b.d));
+  const maxKnown=Math.max(0,...Object.values(byDate));
+  if(Number(v.km)>maxKnown)byDate[today()]=Number(v.km);
+  // O contador só sobe: leituras inferiores à anterior (gralhas) são ignoradas em vez de falsearem os anos seguintes.
+  let runMax=0;
+  const arr=Object.entries(byDate).map(([d,k])=>({d,k})).sort((a,b)=>a.d.localeCompare(b.d)).filter(p=>{if(p.k<runMax)return false;runMax=p.k;return true});
   if(arr.length<2||arr[arr.length-1].k<=arr[0].k)return null;
   // Distribui os km percorridos entre duas leituras proporcionalmente aos dias de cada ano civil.
   // Anos sem nenhuma leitura própria (nem registo nem atualização de contador) ficam marcados
   // como estimados — o valor existe, mas é calculado por interpolação, não medido diretamente.
   const realYears=new Set(arr.map(p=>p.d.slice(0,4)));
   const years={};
-  for(let i=1;i<arr.length;i++){
-    const a=arr[i-1],b=arr[i],dkm=b.k-a.k;if(dkm<=0)continue;
+  // Km anteriores à primeira leitura: o contador começa em 0 no ano do ativo (campo "ano"),
+  // por isso esses km são repartidos desde 1 de janeiro desse ano até à primeira leitura.
+  const pts=[...arr],y0=parseInt(v.year,10),fy=parseInt(arr[0].d.slice(0,4),10);
+  if(y0>=1950&&y0<=fy&&arr[0].k>0&&arr[0].d>y0+"-01-01")pts.unshift({d:y0+"-01-01",k:0});
+  for(let i=1;i<pts.length;i++){
+    const a=pts[i-1],b=pts[i],dkm=b.k-a.k;if(dkm<=0)continue;
     const d0=new Date(a.d+"T12:00"),d1=new Date(b.d+"T12:00"),totalDaysSeg=Math.max(1,(d1-d0)/864e5);
     let cur=new Date(d0);
     while(cur<d1){
@@ -1080,7 +1094,7 @@ function relatorios(v){
   <div class="acts" style="margin:0 0 12px"><button class="btn ghost" onclick="compareAssets()">Comparar ativos</button></div>
   <div class="stats">${stats.map(([n,l])=>`<div class="stat"><div class="mut">${l}</div><div class="num" style="font-size:22px">${n}</div></div>`).join("")}</div>
 
-  ${allYears.length?`<h3 style="margin:16px 0 8px">Por ano</h3><p class="mut" style="margin-top:0">"Estimado" = sem nenhuma leitura própria nesse ano; o valor é calculado por interpolação entre as leituras mais próximas.</p>${allYears.map(y=>{
+  ${allYears.length?`<h3 style="margin:16px 0 8px">Por ano</h3><p class="mut" style="margin-top:0">Os km de cada ano resultam das leituras (registos e atualizações do contador), repartidos pelos dias entre leituras consecutivas. Os km anteriores à primeira leitura são repartidos desde o ano do ativo (contador a 0). "Estimado" = sem nenhuma leitura própria nesse ano.</p>${allYears.map(y=>{
     const km=annYears[y]||0,cost=c.byYear[y]||0,perKm=km>0&&cost>0?cost/km:null,est=ann&&ann.estimated&&ann.estimated[y];
     const yLabel=y+(est?" (estimado)":"");
     return `<div class="card" role="button" onclick="yearDetail('${v.id}','${y}')" style="cursor:pointer">
