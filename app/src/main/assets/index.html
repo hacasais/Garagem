@@ -67,8 +67,9 @@ details.card summary::after{content:"›";float:right;transform:rotate(90deg);di
 details.card[open] summary::after{transform:rotate(270deg)}
 #lb{position:fixed;inset:0;background:#000d;display:none;place-items:center;z-index:9}#lb img{max-width:96%;max-height:90%;border-radius:4px}
 /* --- ajuste de largura: nada pode alargar a página (barra do topo, nomes longos, avisos) --- */
-html,body{max-width:100%;overflow-x:hidden}
-main{width:100%;min-width:0}
+html,body{max-width:100%}
+/* "clip" corta o excesso sem criar um contentor de scroll (overflow-x:hidden em html+body bloqueava o scroll vertical) */
+main{width:100%;min-width:0;overflow-x:clip}
 .top{flex-wrap:wrap;row-gap:8px}
 .top h1{flex:1 1 auto;min-width:0;white-space:nowrap}
 .top>div{flex:0 0 auto;margin-left:auto}
