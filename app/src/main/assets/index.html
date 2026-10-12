@@ -496,6 +496,9 @@ function editVeh(id){
   <div class="acts" style="margin-top:6px"><button type="button" class="btn ghost sm" onclick="manageAssetTypes()">Gerir tipos de ativo</button></div>`}
   <label style="margin-top:14px">Nome</label><input name="name" required placeholder="Ex.: Golf do dia a dia / Recuperador da sala" value="${esc(v.name)}">
   <div class="g2"><div><label>Matrícula / identificador</label><input name="plate" placeholder="00-AA-00 ou nº de série" value="${esc(v.plate)}"></div><div><label>Ano</label><input name="year" inputmode="numeric" value="${esc(v.year)}"></div></div>
+  <label>Medido em</label>
+  <select name="unit" id="unitSel" onchange="unitChange(this.value)">${["km","horas","none"].map(k=>`<option value="${k}" ${k===unit?"selected":""}>${k==="km"?"Quilómetros (km) e tempo":k==="horas"?"Horas de funcionamento (h) e tempo":"Só tempo (sem contador)"}</option>`).join("")}</select>
+  <p class="mut" style="margin:4px 0 0">Define o contador deste ativo: muda os rótulos, os avisos e os relatórios. Os valores já registados mantêm-se, confirma-os se mudares de grandeza.</p>
   <div id="counterWrap" style="display:${unit==="none"?"none":""}">
     <label id="counterLabel">${UNIT_NAME[unit]} atuais</label><input name="km" type="number" inputmode="numeric" min="0" value="${v.km??""}">
   </div>
@@ -511,7 +514,8 @@ function editVeh(id){
       o={id:uid(),created:Date.now(),records:[],alerts:[],plan:mkPlan(t.plan),tech:[],assetType:t.key,unit:t.unit};
     }
     const oldKm=Number(o.km)||0;
-    Object.assign(o,{name:f.get("name"),plate:f.get("plate"),year:f.get("year"),km:unitOf(o)==="none"?0:(Number(f.get("km"))||0)});
+    const nu=f.get("unit");if(nu==="km"||nu==="horas"||nu==="none")o.unit=nu;
+    Object.assign(o,{name:f.get("name"),plate:f.get("plate"),year:f.get("year"),km:unitOf(o)==="none"?oldKm:(Number(f.get("km"))||0)});
     if(unitOf(o)!=="none"&&o.km>0&&o.km!==oldKm)logKm(o,o.km);
     if(p[0])o.photo=p[0];
     if(!id){S.vehicles.push(o);S.sel=o.id;S.tab="resumo"}
@@ -836,12 +840,17 @@ function removeAssetType(i){
   tx("kv","readwrite",s=>s.put(meta,"meta")).catch(()=>{});
   manageAssetTypes();
 }
-function assetTypeChange(key){
-  const t=assetTypes().find(x=>x.key===key)||assetTypes()[0];
+function unitChange(u){
   const wrap=document.getElementById("counterWrap");
   if(!wrap)return;
-  if(t.unit==="none"){wrap.style.display="none"}
-  else{wrap.style.display="";document.getElementById("counterLabel").textContent=UNIT_NAME[t.unit]+" atuais"}
+  if(u==="none"){wrap.style.display="none"}
+  else{wrap.style.display="";document.getElementById("counterLabel").textContent=UNIT_NAME[u]+" atuais"}
+}
+function assetTypeChange(key){
+  const t=assetTypes().find(x=>x.key===key)||assetTypes()[0];
+  const sel=document.getElementById("unitSel");
+  if(sel)sel.value=t.unit;
+  unitChange(t.unit);
 }
 const normType=t=>(t||"").trim().toLowerCase();
 function planAlerts(v){
@@ -1023,7 +1032,7 @@ function compareResults(){
     vs.forEach(v=>{
       const groups=groupLifespans(partLifespans(v));
       html+=`<div class="mut" style="margin:10px 0 4px;font-weight:600">${esc(v.name)}</div>`;
-      html+=groups.length?groups.map(g=>`<div class="card"><div class="row"><span>${esc(g.type)}${g.brand!=="—"?" · "+esc(g.brand):""}</span><span class="num" style="font-size:15px">${g.avgKm?g.avgKm.toLocaleString("pt-PT")+" km · ":""}${fmtDays(g.avgDays)}</span></div></div>`).join(""):`<div class="empty">Sem dados suficientes.</div>`;
+      html+=groups.length?groups.map(g=>`<div class="card"><div class="row"><span>${esc(g.type)}${g.brand!=="—"?" · "+esc(g.brand):""}</span><span class="num" style="font-size:15px">${g.avgKm?g.avgKm.toLocaleString("pt-PT")+(UNIT_SUFFIX[unitOf(v)]||" km")+" · ":""}${fmtDays(g.avgDays)}</span></div></div>`).join(""):`<div class="empty">Sem dados suficientes.</div>`;
     });
   }
 
@@ -1103,7 +1112,7 @@ function relatorios(v){
   <div class="acts" style="margin:0 0 12px"><button class="btn ghost" onclick="compareAssets()">Comparar ativos</button></div>
   <div class="stats">${stats.map(([n,l])=>`<div class="stat"><div class="mut">${l}</div><div class="num" style="font-size:22px">${n}</div></div>`).join("")}</div>
 
-  ${allYears.length?`<h3 style="margin:16px 0 8px">Por ano</h3><p class="mut" style="margin-top:0">Os km de cada ano resultam das leituras (registos e atualizações do contador), repartidos pelos dias entre leituras consecutivas. Os km anteriores à primeira leitura são repartidos desde o ano do ativo (contador a 0). "Estimado" = sem nenhuma leitura própria nesse ano.</p>${allYears.map(y=>{
+  ${allYears.length?`<h3 style="margin:16px 0 8px">Por ano</h3><p class="mut" style="margin-top:0">Os ${suf||"km"} de cada ano resultam das leituras (registos e atualizações do contador), repartidos pelos dias entre leituras consecutivas. Os ${suf||"km"} anteriores à primeira leitura são repartidos desde o ano do ativo (contador a 0). "Estimado" = sem nenhuma leitura própria nesse ano.</p>${allYears.map(y=>{
     const km=annYears[y]||0,cost=c.byYear[y]||0,perKm=km>0&&cost>0?cost/km:null,est=ann&&ann.estimated&&ann.estimated[y];
     const yLabel=y+(est?" (estimado)":"");
     return `<div class="card" role="button" onclick="yearDetail('${v.id}','${y}')" style="cursor:pointer">
@@ -1116,7 +1125,7 @@ function relatorios(v){
   <p class="mut" style="margin-top:0">Calculado entre registos sucessivos do mesmo tipo. Preenche "Marca/modelo" num registo (pneus, travões…) para comparares qual dura mais.</p>
   ${groups.length?groups.map((g,i)=>`<div class="card" role="button" onclick="lifespanDetail('${v.id}',${i})" style="cursor:pointer"><div class="row"><strong>${esc(g.type)}</strong><span class="mut">${g.n} troca${g.n>1?"s":""} ›</span></div>
     <div class="mut" style="margin-top:2px">${g.brand!=="—"?esc(g.brand):"Sem marca/modelo registado"}</div>
-    <div style="margin-top:6px;display:flex;gap:14px">${g.avgKm?`<span class="num" style="font-size:17px">${g.avgKm.toLocaleString("pt-PT")} km</span>`:""}<span class="num" style="font-size:17px">${fmtDays(g.avgDays)}</span></div></div>`).join("")
+    <div style="margin-top:6px;display:flex;gap:14px">${g.avgKm?`<span class="num" style="font-size:17px">${g.avgKm.toLocaleString("pt-PT")} ${suf||"km"}</span>`:""}<span class="num" style="font-size:17px">${fmtDays(g.avgDays)}</span></div></div>`).join("")
   :`<div class="empty">Ainda não há duas ocorrências do mesmo tipo de registo para calcular durações.</div>`}
   `;
 }
@@ -1177,7 +1186,7 @@ async function removeType(i){
 function planSheet(){
   const v=cur();document.querySelectorAll(".sheet").forEach(s=>s.remove());
   const pa=Object.fromEntries(planAlerts(v).map(a=>[a.planId,a]));
-  sheet(`<h2>Plano de manutenção</h2><p class="mut">Define de quanto em quanto tempo ou km se faz cada intervenção. Os avisos calculam-se sozinhos a partir do último registo desse tipo. Os valores são sugestões: ajusta-os ao manual do fabricante.</p>
+  sheet(`<h2>Plano de manutenção</h2><p class="mut">Define de quanto em quanto tempo ou ${unitOf(v)==="horas"?"horas":"km"} se faz cada intervenção. Os avisos calculam-se sozinhos a partir do último registo desse tipo. Os valores são sugestões: ajusta-os ao manual do fabricante.</p>
   ${[...v.plan].sort((a,b)=>a.type.localeCompare(b.type,"pt")).map(p=>`<div class="card"><div class="row"><div><strong>${esc(p.type)}</strong><div class="mut">${[p.km?"cada "+fmtCounterN(p.km,unitOf(v)):"",p.months?"cada "+p.months+" meses":""].filter(Boolean).join(" · ")||"Sem intervalo"}</div>${pa[p.id]&&pa[p.id].none?`<div class="mut">Sem histórico: regista a última vez ou indica-a ao editar.</div>`:""}</div><button type="button" class="btn ghost sm" onclick="editPlan('${p.id}')">Editar</button></div></div>`).join("")}
   <div class="acts"><button type="button" class="btn ghost" data-close>Fechar</button><button type="button" class="btn" onclick="editPlan()">+ Intervenção</button></div>`,()=>{});
 }

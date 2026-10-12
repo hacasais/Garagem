@@ -68,13 +68,14 @@ class AlertWorker(ctx: Context, params: WorkerParameters) : Worker(ctx, params) 
             val vid = v.optString("id", "v$i")
             val name = v.optString("name", "Viatura")
             val curKm = v.optDouble("km", 0.0)
+            val unitSuf = when (v.optString("unit", "km")) { "horas" -> "h"; "none" -> ""; else -> "km" }
             val aPrefs = v.optJSONObject("alertPrefs")
 
             v.optJSONArray("alerts")?.let { alerts ->
                 for (j in 0 until alerts.length()) {
                     val a = alerts.getJSONObject(j)
                     val aid = a.optString("id", "a$j")
-                    checkAndAdd(due, "$vid|$aid", name, a.optString("title"), a.optString("date", ""), a.optDouble("km", 0.0), curKm, today, todayStr, aPrefs?.optJSONObject(aid), cfg)
+                    checkAndAdd(due, "$vid|$aid", name, a.optString("title"), a.optString("date", ""), a.optDouble("km", 0.0), curKm, today, todayStr, aPrefs?.optJSONObject(aid), cfg, unitSuf)
                 }
             }
 
@@ -120,7 +121,7 @@ class AlertWorker(ctx: Context, params: WorkerParameters) : Worker(ctx, params) 
                     if (ovDate.isNotEmpty()) dateDue = ovDate
                     if (ovKm > 0) kmDue = ovKm
 
-                    checkAndAdd(due, "$vid|$pid", name, type, dateDue, kmDue, curKm, today, todayStr, pp, cfg)
+                    checkAndAdd(due, "$vid|$pid", name, type, dateDue, kmDue, curKm, today, todayStr, pp, cfg, unitSuf)
                 }
             }
         }
@@ -155,7 +156,7 @@ class AlertWorker(ctx: Context, params: WorkerParameters) : Worker(ctx, params) 
     private fun checkAndAdd(
         due: MutableList<Pair<String, String>>, key: String, vehicle: String, title: String,
         dateStr: String, kmTarget: Double, curKm: Double, today: Calendar, todayStr: String,
-        pref: JSONObject?, cfg: Cfg
+        pref: JSONObject?, cfg: Cfg, unitSuf: String
     ) {
         if (pref != null) {
             if (pref.optBoolean("mute", false)) return
@@ -168,7 +169,7 @@ class AlertWorker(ctx: Context, params: WorkerParameters) : Worker(ctx, params) 
         var days: Long? = null
         var kmLeft: Double? = null
         if (dateStr.isNotEmpty()) parseDate(dateStr)?.let { days = daysBetween(today, it) }
-        if (kmTarget > 0) kmLeft = kmTarget - curKm
+        if (kmTarget > 0 && unitSuf.isNotEmpty()) kmLeft = kmTarget - curKm
 
         val d = days
         val k = kmLeft
@@ -177,7 +178,7 @@ class AlertWorker(ctx: Context, params: WorkerParameters) : Worker(ctx, params) 
 
         val parts = mutableListOf<String>()
         if (d != null) parts.add(if (d < 0) "há ${-d} dias" else if (d == 0L) "hoje" else "em $d dias")
-        if (k != null) parts.add(if (k <= 0) "já passou" else "faltam ${k.toInt()} km")
+        if (k != null) parts.add(if (k <= 0) "já passou" else "faltam ${k.toInt()} $unitSuf")
         due.add(Pair(key, "$vehicle — $title (${parts.joinToString(" · ")})"))
     }
 
