@@ -601,11 +601,12 @@ function editKm(){
 }
 function editRec(id,pre){
   const v=cur(),x=(v.records||[]).find(r=>r.id===id)||pre||{};
+  const tOnly=timeOnlyType(v,x.type);
   sheet(`<h2>${id?"Editar registo":"Novo registo"}</h2>
   <div class="row" style="align-items:baseline"><label style="margin:0">Tipo</label><button type="button" class="btn ghost sm" style="padding:2px 10px;min-height:0" onclick="manageTypes()">Gerir lista</button></div>
   <input name="type" required list="rectypelist" placeholder="Escolhe ou escreve um tipo novo" value="${esc(x.type||"")}">
   <datalist id="rectypelist">${allTypes().map(t=>`<option value="${esc(t)}">`).join("")}</datalist>
-  <div class="g2"><div><label>Data</label><input name="date" type="date" required value="${x.date||today()}"></div>${unitOf(v)!=="none"?`<div><label>${UNIT_NAME[unitOf(v)]}</label><input name="km" type="number" inputmode="numeric" value="${x.km??v.km??""}"></div>`:""}</div>
+  <div class="g2"><div><label>Data</label><input name="date" type="date" required value="${x.date||today()}"></div>${unitOf(v)!=="none"?`<div><label>${UNIT_NAME[unitOf(v)]}${tOnly?" (opcional)":""}</label><input name="km" type="number" inputmode="numeric" value="${x.km??(tOnly?"":v.km)??""}"></div>`:""}</div>
   <div class="g2"><div><label>Custo (€)</label><input name="cost" type="number" step="0.01" inputmode="decimal" value="${x.cost??""}"></div>
   <div><div class="row" style="align-items:baseline"><label style="margin:0">Marca / modelo</label><button type="button" class="btn ghost sm" style="padding:2px 8px;min-height:0;font-size:12px" onclick="manageBrands()">Gerir</button></div>
   <input name="brand" list="brandlist" placeholder="Ex.: Michelin CrossClimate 2" value="${esc(x.brand||"")}"></div></div>
@@ -622,6 +623,7 @@ function editRec(id,pre){
       v.records.push(o);
       if(pre?.fromAlert&&v.alertPrefs)delete v.alertPrefs[pre.fromAlert];
       resetPlanPrefs(v,o.type);
+      advanceFixedPlans(v,o);
       if(pre?.fromAlert)v.alerts=v.alerts.filter(a=>a.id!==pre.fromAlert);
       if(pre?.clearPlanNote){const pl=(v.plan||[]).find(x=>x.id===pre.clearPlanNote);if(pl)pl.note=""}
       if(confirm('Registo guardado. Queres aproveitar a mesma data'+(unitOf(v)!=="none"?"/"+(unitOf(v)==="horas"?"horas":"km"):"")+' para registar outra tarefa feita ao mesmo tempo (ex.: óleo de travões)?'))
@@ -861,7 +863,8 @@ function planAlerts(v){
     let ld=p.lastDate||"",lk=Number(p.lastKm)||0;const r=rs[0];
     if(r&&(!ld||r.date>=ld)){ld=r.date;lk=Number(r.km)||0}
     let date="";if(Number(p.months)&&ld){const d=new Date(ld+"T12:00");d.setMonth(d.getMonth()+Number(p.months));date=d.toISOString().slice(0,10)}
-    const km=Number(p.km)&&lk?lk+Number(p.km):0;
+    let km=Number(p.km)&&lk?lk+Number(p.km):0;
+    if(p.fixed&&p.nextDue&&Number(p.months)){date=p.nextDue;km=0}   // data limite fixa: não depende do dia em que se fez
     return{id:"plan:"+p.id,title:p.type,derived:true,planId:p.id,date,km,note:p.note||"",none:!date&&!km};
   });
 }
@@ -887,6 +890,23 @@ function isActive(a,v){
   return (i.days!==null&&i.days<=ld)||(i.kmL!==null&&i.kmL<=lk);
 }
 function addDaysISO(n,months){const d=new Date(today()+"T12:00");if(months)d.setMonth(d.getMonth()+months);else d.setDate(d.getDate()+n);return d.toISOString().slice(0,10)}
+function addMonthsISO(iso,n){
+  const [y,m,d]=iso.split("-").map(Number),t=new Date(Date.UTC(y,m-1+n,1));
+  const last=new Date(Date.UTC(t.getUTCFullYear(),t.getUTCMonth()+1,0)).getUTCDate();
+  t.setUTCDate(Math.min(d,last));return t.toISOString().slice(0,10);
+}
+// Ao registar uma intervenção com data limite fixa, a data avança só o intervalo (30/11/2026 → 30/11/2027),
+// seja qual for o dia em que foi paga/feita. Registos de ciclos anteriores não mexem na data.
+function advanceFixedPlans(v,r){
+  (v.plan||[]).forEach(p=>{
+    if(!p.fixed||!p.nextDue||!Number(p.months)||normType(p.type)!==normType(r.type))return;
+    const m=Number(p.months);
+    if(r.date<=addMonthsISO(p.nextDue,-m))return;
+    let d=p.nextDue;do{d=addMonthsISO(d,m)}while(d<=r.date);
+    p.nextDue=d;
+  });
+}
+const timeOnlyType=(v,t)=>unitOf(v)!=="none"&&(v.plan||[]).some(p=>normType(p.type)===normType(t)&&!Number(p.km)&&Number(p.months));
 function resetPlanPrefs(v,type){(v.plan||[]).filter(p=>normType(p.type)===normType(type)).forEach(p=>setPref(v,"plan:"+p.id,{snoozeUntil:null,date:null,km:null}))}
 function baseTypes(){
   const removed=meta.typesRemoved||[],custom=meta.typesCustom||[];
@@ -1188,7 +1208,7 @@ function planSheet(){
   const v=cur();document.querySelectorAll(".sheet").forEach(s=>s.remove());
   const pa=Object.fromEntries(planAlerts(v).map(a=>[a.planId,a]));
   sheet(`<h2>Plano de manutenção</h2><p class="mut">Define de quanto em quanto tempo ou ${unitOf(v)==="horas"?"horas":"km"} se faz cada intervenção. Os avisos calculam-se sozinhos a partir do último registo desse tipo. Os valores são sugestões: ajusta-os ao manual do fabricante.</p>
-  ${[...v.plan].sort((a,b)=>a.type.localeCompare(b.type,"pt")).map(p=>`<div class="card"><div class="row"><div><strong>${esc(p.type)}</strong><div class="mut">${[p.km?"cada "+fmtCounterN(p.km,unitOf(v)):"",p.months?"cada "+p.months+" meses":""].filter(Boolean).join(" · ")||"Sem intervalo"}</div>${pa[p.id]&&pa[p.id].none?`<div class="mut">Sem histórico: regista a última vez ou indica-a ao editar.</div>`:""}</div><button type="button" class="btn ghost sm" onclick="editPlan('${p.id}')">Editar</button></div></div>`).join("")}
+  ${[...v.plan].sort((a,b)=>a.type.localeCompare(b.type,"pt")).map(p=>`<div class="card"><div class="row"><div><strong>${esc(p.type)}</strong><div class="mut">${[p.km?"cada "+fmtCounterN(p.km,unitOf(v)):"",p.months?"cada "+p.months+" meses":"",p.fixed&&p.nextDue?"📌 limite "+fmtD(p.nextDue):""].filter(Boolean).join(" · ")||"Sem intervalo"}</div>${pa[p.id]&&pa[p.id].none?`<div class="mut">Sem histórico: regista a última vez ou indica-a ao editar.</div>`:""}</div><button type="button" class="btn ghost sm" onclick="editPlan('${p.id}')">Editar</button></div></div>`).join("")}
   <div class="acts"><button type="button" class="btn ghost" data-close>Fechar</button><button type="button" class="btn" onclick="editPlan()">+ Intervenção</button></div>`,()=>{});
 }
 function editPlan(id){
@@ -1208,6 +1228,9 @@ function editPlan(id){
   <div class="pmo" style="display:${hasCounter&&mode0==="km"?"none":""}"><label>A cada (meses)</label><input name="months" type="number" inputmode="numeric" min="0" value="${p.months||""}"></div>
   </div>
   ${hasCounter?`<p class="mut">Com "Ambos", o aviso dispara com o que chegar primeiro.</p>`:""}
+  <label style="display:flex;gap:10px;align-items:center;margin-top:14px"><input type="checkbox" name="fixed" ${p.fixed?"checked":""} style="width:22px;min-height:0" onchange="document.getElementById('fixedWrap').style.display=this.checked?'':'none'"> Data limite fixa (ex.: IUC, IPO): pagar ou fazer mais cedo/tarde não muda a data seguinte</label>
+  <div id="fixedWrap" style="display:${p.fixed?"":"none"}"><label>Próxima data limite</label><input name="nextDue" type="date" value="${p.nextDue||""}">
+  <p class="mut">Precisa de um intervalo em meses. Depois de registares a intervenção, a data avança só esse intervalo (ex.: 30/11/2026 → 30/11/2027), e não a partir do dia em que a fizeste.</p></div>
   <label>Última vez (só se ainda não tens registo)</label><div class="g2"><input name="lastDate" type="date" value="${p.lastDate||""}">${hasCounter?`<input name="lastKm" type="number" inputmode="numeric" placeholder="${u==="horas"?"horas":"km"}" value="${p.lastKm||""}">`:""}</div>
   <label>Lembrete para a próxima vez (opcional)</label><input name="note" placeholder="Ex.: rever nível das pastilhas de travão" value="${esc(p.note||"")}">
   <p class="mut">Só vale para a próxima vez: aparece junto deste aviso, passa para as notas do registo quando tocares em «Concluir», e depois limpa-se sozinho — não se repete nas vezes seguintes.</p>
@@ -1219,9 +1242,12 @@ function editPlan(id){
   async(f,form)=>{const mode=hasCounter?f.get("mode"):"meses",name=(f.get("type")||"").trim();if(!name)return;
     const km=hasCounter&&mode!=="meses"?Number(f.get("km"))||0:0,months=mode!=="km"?Number(f.get("months"))||0:0;
     if(!km&&!months){alert("Indica "+(hasCounter?(u==="horas"?"horas, meses ou ambos.":"km, meses ou ambos."):"os meses.")); setTimeout(()=>editPlan(id),50);return}
+    const fixed=!!f.get("fixed")&&months>0,nextDue=f.get("nextDue")||"";
+    if(f.get("fixed")&&!months){alert("A data limite fixa precisa de um intervalo em meses.");setTimeout(()=>editPlan(id),50);return}
+    if(fixed&&!nextDue){alert("Indica a próxima data limite.");setTimeout(()=>editPlan(id),50);return}
     const novos=await files(form,"att");
     const o=id?p:{id:uid(),photos:[]};
-    Object.assign(o,{type:name,km,months,lastDate:f.get("lastDate"),lastKm:Number(f.get("lastKm"))||0,note:(f.get("note")||"").trim()});
+    Object.assign(o,{type:name,km:fixed?0:km,months,fixed,nextDue:fixed?nextDue:"",lastDate:f.get("lastDate"),lastKm:Number(f.get("lastKm"))||0,note:(f.get("note")||"").trim()});
     o.photos=[...(o.photos||[]),...novos];
     if(!id){v.plan=v.plan||defPlan();v.plan.push(o)}setTimeout(planSheet,50)});
 }

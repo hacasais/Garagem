@@ -114,6 +114,12 @@ class AlertWorker(ctx: Context, params: WorkerParameters) : Worker(ctx, params) 
                     val kmInterval = p.optDouble("km", 0.0)
                     if (kmInterval > 0 && lastKm > 0) kmDue = lastKm + kmInterval
 
+                    // Data limite fixa (ex.: IUC): usa a data guardada, não a do último registo
+                    if (p.optBoolean("fixed", false) && p.optString("nextDue", "").isNotEmpty() && months > 0) {
+                        dateDue = p.optString("nextDue")
+                        kmDue = 0.0
+                    }
+
                     // Nova data / novo valor definidos manualmente na app (valem até haver novo registo)
                     val pp = aPrefs?.optJSONObject(pid)
                     val ovDate = pp?.optString("date", "") ?: ""
