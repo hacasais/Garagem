@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>RLTecAuto</title><meta name="theme-color" content="#102E2C">
+<title>RLTEC Ativos</title><meta name="theme-color" content="#102E2C">
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet">
 <style>
 :root{--bg:#EEF0EE;--card:#FFFFFF;--ink:#151A19;--mut:#5A6462;--line:#D7DBD8;--pri:#102E2C;--pri2:#1A413E;--onpri:#F2F5F3;--warn:#8A5A12;--warnbg:#F2E6CC;--bad:#8C2B22;--badbg:#F3DAD6;--ok:#215C40;--okbg:#D9ECE1;--cut:14px;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
@@ -107,7 +107,7 @@ async function restorePhotosFromFile(){
     if(!window.Android||!Android.hasFile())return false;
     const j=JSON.parse(Android.readFile());
     if(!j||j.app!=="garagem")return false;
-    if(!meta.alertCfg)await applySettings(j);
+    if(!meta.alertCfg||(!meta.smtp&&j.settings&&j.settings.smtp))await applySettings(j);
     if(!j.photos)return false;
     const used=usedIds(),add=[];
     for(const [k,v] of Object.entries(j.photos)){if(!PH[k]&&used.has(k)){PH[k]=v;add.push([k,v])}}
@@ -115,9 +115,9 @@ async function restorePhotosFromFile(){
     return add.length>0;
   }catch(e){return false}
 }
-function fileData(){return{app:"garagem",version:1,saved:new Date().toISOString(),vehicles:S.vehicles,photos:PH,settings:{alerts:alertCfg()}}}
+function fileData(){return{app:"garagem",version:1,saved:new Date().toISOString(),vehicles:S.vehicles,photos:PH,settings:{alerts:alertCfg(),smtp:meta.smtp||null}}}
 async function saveMeta(){try{await tx("kv","readwrite",s=>s.put(meta,"meta"))}catch(e){}fileSync()}
-async function applySettings(j){if(j&&j.settings&&j.settings.alerts){meta.alertCfg=j.settings.alerts;try{await tx("kv","readwrite",s=>s.put(meta,"meta"))}catch(e){}}}
+async function applySettings(j){if(j&&j.settings&&(j.settings.alerts||j.settings.smtp)){if(j.settings.alerts)meta.alertCfg=j.settings.alerts;if(j.settings.smtp)meta.smtp=j.settings.smtp;try{await tx("kv","readwrite",s=>s.put(meta,"meta"))}catch(e){}}}
 async function persist(){
   if(LOAD!=="ok")return;
   try{
@@ -160,7 +160,7 @@ window.onAndroidFile=async mode=>{
     if(j&&j.app==="garagem"&&Array.isArray(j.vehicles)){
       if(confirm("O ficheiro tem "+j.vehicles.length+" ativo(s). Carregar os dados do ficheiro para a app?\n\nOK = carregar.\nCancelar = manter os dados atuais e substituir o conteúdo do ficheiro.")){await applyData(j);render();return}
       if(!confirm("Substituir o conteúdo do ficheiro pelos dados atuais da app?")){Android.clearFile();render();return}
-    }else if(txt.trim()&&!confirm("Este ficheiro não é da Garagem. Substituir o conteúdo?")){Android.clearFile();render();return}
+    }else if(txt.trim()&&!confirm("Este ficheiro não é do RLTEC Ativos. Substituir o conteúdo?")){Android.clearFile();render();return}
     fileSync(true);render();
   }catch(e){banner("Não foi possível ler o ficheiro.")}
 };
@@ -177,7 +177,7 @@ async function autoBackup(){
     }catch(e){banner("Não consegui atualizar o ficheiro escolhido. Foi descarregada uma cópia nova.")}
   }
   try{
-    const a=document.createElement("a");a.href=URL.createObjectURL(new Blob([data],{type:"application/json"}));a.download="garagem-dados-"+today()+".json";document.body.appendChild(a);a.click();a.remove();stamp();
+    const a=document.createElement("a");a.href=URL.createObjectURL(new Blob([data],{type:"application/json"}));a.download="rltec-ativos-dados-"+today()+".json";document.body.appendChild(a);a.click();a.remove();stamp();
   }catch(e){banner("Não foi possível criar o ficheiro de cópia.")}
 }
 async function init(){
@@ -233,7 +233,7 @@ function alertInfo(a,v){
   return{lvl,days,kmL,txt:txt.join(" · "),snoozed:sn,score:(sn?-1e9:0)+lvl*1e6-(days??999)}
 }
 function render(){
-  if(LOAD==="loading"){$("#app").innerHTML=`<div class="empty">A carregar a tua garagem…</div>`;return}
+  if(LOAD==="loading"){$("#app").innerHTML=`<div class="empty">A carregar os teus ativos…</div>`;return}
   if(LOAD==="off"){$("#app").innerHTML=`<div class="empty">Este browser não permite guardar dados locais.<br>Abre o ficheiro com o Chrome (Android) ou o Safari (iPhone), fora do modo privado.</div>`;return}
   save();
   const v=cur();
@@ -257,7 +257,7 @@ function heroTouchEnd(e){
 function listView(){
   const nActAll=S.vehicles.reduce((t,v)=>t+allAlerts(v).filter(a=>isActive(a,v)).length,0);
   const n=S.vehicles.reduce((s,v)=>s+allAlerts(v).filter(a=>near(a,v)).length,0);
-  return `<div class="top"><h1><span class="brand">RT</span>RLTecAuto</h1><div style="display:flex;gap:6px">${S.vehicles.length>1?`<button class="btn ghost sm" onclick="compareAssets()">Comparar</button>`:""}<button class="btn ghost sm" onclick="alarmCenter()">🔔${nActAll?" "+nActAll:""}</button><button class="btn ghost sm" onclick="backup()">Cópia</button></div></div>
+  return `<div class="top"><h1><span class="brand">RT</span>RLTEC Ativos</h1><div style="display:flex;gap:6px">${S.vehicles.length>1?`<button class="btn ghost sm" onclick="compareAssets()">Comparar</button>`:""}<button class="btn ghost sm" onclick="alarmCenter()">🔔${nActAll?" "+nActAll:""}</button><button class="btn ghost sm" onclick="backup()">Cópia</button></div></div>
   ${bkNote()}
   ${n?`<p class="mut" style="margin:0 0 12px">${n} aviso${n>1?"s":""} nos próximos 2 meses (ou a menos de 2 000 km)</p>`:""}
   ${S.vehicles.length?S.vehicles.map(vcard).join(""):`<div class="empty">Ainda não tens nenhum ativo.<br>Adiciona o primeiro para começar a registar.</div>`}
@@ -678,7 +678,11 @@ function manageAlert(vid,id){
   ${a.derived?`<p class="mut">Vem do plano de manutenção. Esta alteração vale só até registares a intervenção.${p.date||p.km?` <button type="button" class="btn ghost sm" id="repm">Repor valores do plano</button>`:""}</p>`:""}
   <h3 style="margin:18px 0 6px">Antecedência do alerta</h3>
   <div class="g2"><div><label>Dias antes</label><input name="ld" type="number" inputmode="numeric" min="0" placeholder="geral: ${cg.leadDays}" value="${a.leadDays??""}"></div>${hasC?`<div><label>${ul} antes</label><input name="lk" type="number" inputmode="numeric" min="0" placeholder="geral: ${cg.leadKm}" value="${a.leadKm??""}"></div>`:""}</div>
-  <label style="display:flex;gap:10px;align-items:center;margin-top:14px"><input type="checkbox" name="mute" ${a.mute?"checked":""} style="width:22px;min-height:0"> Não enviar notificações deste aviso</label>
+  <label style="display:flex;gap:10px;align-items:center;margin-top:14px"><input type="checkbox" name="mute" ${a.mute?"checked":""} style="width:22px;min-height:0"> Silenciar este aviso (sem notificações nem emails)</label>
+  <h3 style="margin:18px 0 6px">✉️ Emails deste aviso</h3>
+  <label>Dias antes em que avisar (ex.: 60, 30, 7, 1, 0)</label><input name="ed" placeholder="geral: ${emailCfg().days.join(", ")}" value="${(p.emailDays||[]).join(", ")}">
+  <label>Datas extra de aviso (ex.: 15/11/2026, 25/11/2026)</label><input name="edt" value="${(p.emailDates||[]).map(fmtD).join(", ")}">
+  <label style="display:flex;gap:10px;align-items:center;margin-top:10px"><input type="checkbox" name="noemail" ${p.noEmail?"checked":""} style="width:22px;min-height:0"> Não enviar emails deste aviso</label>
   <div class="acts"><button type="button" class="btn ghost" data-close>Cancelar</button><button class="btn">Guardar</button></div>
   <div class="acts"><button type="button" class="btn ghost" id="donem">Concluir</button><button type="button" class="btn ghost" id="edm">Editar</button></div>`,
   async f=>{
@@ -687,7 +691,8 @@ function manageAlert(vid,id){
     if(a.derived){setPref(v,id,{date:nd!==(raw.date||"")?nd:null,km:nk!==(raw.km||0)?nk:null})}
     else{const m=(v.alerts||[]).find(x=>x.id===id);if(m){m.date=nd;m.km=nk}}
     const num=k=>f.get(k)===null||f.get(k)===""?null:Math.max(0,Number(f.get(k))||0);
-    setPref(v,id,{leadDays:num("ld"),leadKm:num("lk"),mute:!!f.get("mute")});
+    const ed=parseNums(f.get("ed")),edt=parseDatesTxt(f.get("edt"));
+    setPref(v,id,{leadDays:num("ld"),leadKm:num("lk"),mute:!!f.get("mute"),emailDays:ed.length?ed:null,emailDates:edt.length?edt:null,noEmail:!!f.get("noemail")});
     try{_acRefresh&&_acRefresh()}catch(e){}
   });
   const done=()=>{d.remove();alertsChanged()};
@@ -718,14 +723,82 @@ function alarmCenter(){
   <div class="g2"><div><label>Avisar com (dias)</label><input name="ld" type="number" inputmode="numeric" min="0" value="${c.leadDays}"></div><div><label>Avisar com (km/horas)</label><input name="lk" type="number" inputmode="numeric" min="0" value="${c.leadKm}"></div></div>
   <div class="g2"><div><label>Repetir lembrete (dias)</label><input name="rd" type="number" inputmode="numeric" min="1" value="${c.repeatDays}"></div><div><label>Notificar a partir das (h)</label><input name="hr" type="number" inputmode="numeric" min="0" max="23" value="${c.hour}"></div></div>
   <p class="mut">Valores gerais. Cada aviso pode ter a sua própria antecedência em Gerir.</p>
+  <div class="acts"><button type="button" class="btn ghost" onclick="emailSheet()">✉️ Emails de alerta${emailCfg().on?" (ligado)":""}</button></div>
   <div id="acList">${acList()}</div>
   <div class="acts"><button type="button" class="btn ghost" data-close>Fechar</button><button class="btn">Guardar definições</button></div>`,
   async f=>{
     const n=(k,def,min)=>{const x=f.get(k);return x===null||x===""?def:Math.max(min,Number(x)||0)};
-    meta.alertCfg={on:!!f.get("on"),leadDays:n("ld",ALERT_DEF.leadDays,0),leadKm:n("lk",ALERT_DEF.leadKm,0),repeatDays:n("rd",ALERT_DEF.repeatDays,1),hour:Math.min(23,n("hr",ALERT_DEF.hour,0))};
+    meta.alertCfg={...(meta.alertCfg||{}),on:!!f.get("on"),leadDays:n("ld",ALERT_DEF.leadDays,0),leadKm:n("lk",ALERT_DEF.leadKm,0),repeatDays:n("rd",ALERT_DEF.repeatDays,1),hour:Math.min(23,n("hr",ALERT_DEF.hour,0))};
     await saveMeta();
   });
   _acRefresh=()=>{const el=d.querySelector("#acList");if(el&&d.isConnected)el.innerHTML=acList()};
+}
+function parseNums(s){return [...new Set(String(s||"").split(/[;,\s]+/).map(x=>x.trim()).filter(x=>x!==""&&!isNaN(Number(x))&&Number(x)>=0).map(Number))].sort((a,b)=>b-a)}
+function parseDatesTxt(s){
+  const out=[];
+  String(s||"").split(/[;,\s]+/).forEach(x=>{
+    x=x.trim();let m;
+    if(/^\d{4}-\d{2}-\d{2}$/.test(x))out.push(x);
+    else if((m=x.match(/^(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{4})$/)))out.push(`${m[3]}-${m[2].padStart(2,"0")}-${m[1].padStart(2,"0")}`);
+  });
+  return [...new Set(out)].sort();
+}
+const validEmail=e=>/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e);
+const SMTP_PRESETS={gmail:["smtp.gmail.com",465,"ssl"],outlook:["smtp-mail.outlook.com",587,"starttls"],office365:["smtp.office365.com",587,"starttls"],sapo:["smtp.sapo.pt",465,"ssl"]};
+function smtpPreset(k){
+  const p=SMTP_PRESETS[k];if(!p)return;
+  const q=n=>document.querySelector('.sheet [name='+n+']');
+  q("host").value=p[0];q("port").value=p[1];q("sec").value=p[2];
+}
+function emailSheet(){
+  if(!window.Android||!Android.emailTest){alert("Os emails de alerta só funcionam na app Android.");return}
+  const c=emailCfg(),sm=meta.smtp||{};
+  let status="";try{status=Android.emailStatus()||""}catch(e){}
+  const d=sheet(`<h2>✉️ Emails de alerta</h2>
+  <label style="display:flex;gap:10px;align-items:center;margin-top:6px"><input type="checkbox" name="eon" ${c.on?"checked":""} style="width:22px;min-height:0"> Enviar emails de alerta (também com a app fechada)</label>
+  <label>Destinatários (um por linha ou separados por vírgula)</label>
+  <textarea name="eto" rows="3" placeholder="nome@exemplo.pt">${esc((c.to||[]).join("\n"))}</textarea>
+  <label>Avisar quando faltarem (dias)</label><input name="edays" value="${(c.days||[]).join(", ")}">
+  <label>Avisar quando faltarem (km / horas)</label><input name="ekm" value="${(c.km||[]).join(", ")}">
+  <p class="mut">Cada valor envia um email, uma só vez por aviso. O 0 avisa no próprio dia / quando o contador chega ao valor. Cada aviso pode ter as suas datas em Gerir.</p>
+  <div class="g2"><div><label>Se vencido, repetir (dias)</label><input name="eover" type="number" inputmode="numeric" min="0" value="${c.overdueEvery??7}"></div><div><label>Enviar a partir das (h)</label><input name="ehour" type="number" inputmode="numeric" min="0" max="23" value="${c.hour??8}"></div></div>
+  <p class="mut">0 em "repetir" = não repetir. Os avisos que disparam na mesma altura vão num só email para todos os destinatários.</p>
+  <h3 style="margin:18px 0 6px">Servidor de envio (SMTP)</h3>
+  <label>Modelo</label><select onchange="smtpPreset(this.value)"><option value="">Outro / manual</option><option value="gmail">Gmail</option><option value="outlook">Outlook / Hotmail</option><option value="office365">Microsoft 365</option><option value="sapo">SAPO</option></select>
+  <div class="g2"><div><label>Servidor</label><input name="host" value="${esc(sm.host||"")}" placeholder="smtp.gmail.com" autocapitalize="off"></div><div><label>Porta</label><input name="port" type="number" inputmode="numeric" value="${sm.port||465}"></div></div>
+  <label>Segurança</label><select name="sec"><option value="ssl" ${sm.security!=="starttls"?"selected":""}>SSL/TLS (porta 465)</option><option value="starttls" ${sm.security==="starttls"?"selected":""}>STARTTLS (porta 587)</option></select>
+  <label>Utilizador (email da conta)</label><input name="suser" type="email" value="${esc(sm.user||"")}" autocapitalize="off">
+  <label>Palavra-passe</label><input name="spass" type="password" autocomplete="off" value="${esc(sm.pass||"")}">
+  <label>Remetente (opcional)</label><input name="sfrom" type="email" value="${esc(sm.from||"")}" placeholder="igual ao utilizador" autocapitalize="off">
+  <p class="mut">Gmail: ativa a verificação em 2 passos e cria uma «palavra-passe de app» em myaccount.google.com/apppasswords; usa essa palavra-passe aqui, não a normal. <b>Atenção:</b> estes dados, incluindo a palavra-passe, ficam gravados em texto simples no ficheiro de dados, para funcionarem noutro telemóvel. Quem tiver o ficheiro consegue lê-los. Usa de preferência uma conta de email só para os avisos, ou uma palavra-passe de app (que podes revogar a qualquer momento), e não partilhes o ficheiro.</p>
+  <div class="acts"><button type="button" class="btn ghost" id="etest">Enviar email de teste</button></div>
+  <p class="mut" id="estat">${status?"Último envio automático: "+esc(status):""}</p>
+  <div class="acts"><button type="button" class="btn ghost" data-close>Cancelar</button><button class="btn">Guardar</button></div>`,
+  async f=>{
+    const to=parseEmails(f.get("eto"));
+    if(f.get("eon")&&!to.length){alert("Indica pelo menos um destinatário válido.");throw new Error("cancel")}
+    const bad=emailBad(f.get("eto"));if(bad.length){alert("Email inválido: "+bad.join(", "));throw new Error("cancel")}
+    const days=parseNums(f.get("edays")),km=parseNums(f.get("ekm"));
+    meta.alertCfg={...(meta.alertCfg||{}),email:{on:!!f.get("eon"),to,days,km,overdueEvery:Math.max(0,Number(f.get("eover"))||0),hour:Math.min(23,Math.max(0,Number(f.get("ehour"))||0))}};
+    meta.smtp=smtpFrom(f);
+    await saveMeta();
+  });
+  d.querySelector("#etest").onclick=()=>{
+    const f=new FormData(d.querySelector("form")),to=parseEmails(f.get("eto"));
+    if(!to.length){alert("Indica pelo menos um destinatário.");return}
+    d.querySelector("#estat").textContent="A enviar email de teste…";
+    Android.emailTest(to.join(","),JSON.stringify(smtpFrom(f)));
+  };
+  window.onEmailTest=r=>{
+    try{r=JSON.parse(r)}catch(e){return}
+    const el=document.querySelector("#estat");
+    if(el)el.textContent=(r.ok?"✅ ":"❌ ")+r.msg;
+  };
+}
+function parseEmails(s){return [...new Set(String(s||"").split(/[;,\s]+/).map(x=>x.trim()).filter(validEmail))]}
+function emailBad(s){return String(s||"").split(/[;,\s]+/).map(x=>x.trim()).filter(x=>x&&!validEmail(x))}
+function smtpFrom(f){
+  return{host:(f.get("host")||"").trim(),port:Number(f.get("port"))||465,security:f.get("sec")||"ssl",user:(f.get("suser")||"").trim(),pass:f.get("spass")||"",from:(f.get("sfrom")||"").trim()};
 }
 function delAlert(id){const v=cur();v.alerts=v.alerts.filter(a=>a.id!==id);if(v.alertPrefs)delete v.alertPrefs[id];document.querySelector(".sheet")?.remove();render()}
 function techFieldList(cat){
@@ -868,8 +941,9 @@ function planAlerts(v){
     return{id:"plan:"+p.id,title:p.type,derived:true,planId:p.id,date,km,note:p.note||"",none:!date&&!km};
   });
 }
-const ALERT_DEF={on:true,leadDays:14,leadKm:500,repeatDays:1,hour:9};
+const ALERT_DEF={on:true,leadDays:14,leadKm:500,repeatDays:1,hour:9,email:{on:false,to:[],days:[30,14,7,3,1,0],km:[1000,500,100,0],overdueEvery:7,hour:8}};
 const alertCfg=()=>({...ALERT_DEF,...(meta.alertCfg||{})});
+const emailCfg=()=>({...ALERT_DEF.email,...((meta.alertCfg||{}).email||{})});
 const prefsOf=(v,id)=>(v.alertPrefs&&v.alertPrefs[id])||{};
 function setPref(v,id,patch){
   v.alertPrefs=v.alertPrefs||{};
@@ -1278,9 +1352,9 @@ function backup(){
     d.querySelector("#afl")?.addEventListener("click",()=>loadFromFile(say,d));
   }
   d.querySelector("#ex").onclick=async()=>{
-    const name="garagem-"+today()+".json",blob=new Blob([JSON.stringify(fileData())],{type:"application/json"}),f=new File([blob],name,{type:"application/json"});
+    const name="rltec-ativos-"+today()+".json",blob=new Blob([JSON.stringify(fileData())],{type:"application/json"}),f=new File([blob],name,{type:"application/json"});
     try{
-      if(navigator.canShare&&navigator.canShare({files:[f]}))await navigator.share({files:[f],title:"Garagem"});else throw 0;
+      if(navigator.canShare&&navigator.canShare({files:[f]}))await navigator.share({files:[f],title:"RLTEC Ativos"});else throw 0;
     }catch(e){
       if(e&&e.name==="AbortError")return;
       const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=name;a.click();

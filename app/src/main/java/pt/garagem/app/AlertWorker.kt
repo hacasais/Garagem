@@ -14,7 +14,11 @@ import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.work.Worker
 import androidx.work.WorkerParameters
+import org.json.JSONArray
 import org.json.JSONObject
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 import java.util.Calendar
 import java.util.TimeZone
 
@@ -25,6 +29,13 @@ import java.util.TimeZone
  * a vencer em breve ou já passado.
  */
 class AlertWorker(ctx: Context, params: WorkerParameters) : Worker(ctx, params) {
+
+    // Todos os avisos considerados nesta execução (para o email, que tem as suas próprias datas de aviso)
+    private class Cand(
+        val key: String, val vehicle: String, val title: String, val dateStr: String, val kmTarget: Double,
+        val days: Long?, val kmLeft: Double?, val unitSuf: String, val pref: JSONObject?
+    )
+    private val cands = mutableListOf<Cand>()
 
     private class Cfg(val on: Boolean, val leadDays: Double, val leadKm: Double, val repeatDays: Int, val hour: Int)
 
@@ -51,10 +62,10 @@ class AlertWorker(ctx: Context, params: WorkerParameters) : Worker(ctx, params) 
             repeatDays = maxOf(1, s?.optInt("repeatDays", 1) ?: 1),
             hour = (s?.optInt("hour", 9) ?: 9).coerceIn(0, 23)
         )
-        if (!cfg.on) return Result.success()
-
         val now = Calendar.getInstance()
-        if (now.get(Calendar.HOUR_OF_DAY) < cfg.hour) return Result.success()
+        val nowHour = now.get(Calendar.HOUR_OF_DAY)
+        val emailCfg = s?.optJSONObject("email")
+        val smtpCfg = SmtpCfg.fromJson(json.optJSONObject("settings")?.optJSONObject("smtp"))
 
         val today = Calendar.getInstance().apply {
             set(Calendar.HOUR_OF_DAY, 12); set(Calendar.MINUTE, 0)
@@ -132,6 +143,12 @@ class AlertWorker(ctx: Context, params: WorkerParameters) : Worker(ctx, params) 
             }
         }
 
+        if (cfg.on && nowHour >= cfg.hour) runNotifications(due, cfg)
+        try { processEmails(emailCfg, smtpCfg, nowHour, today, todayStr) } catch (e: Exception) { }
+        return Result.success()
+    }
+
+    private fun runNotifications(due: List<Pair<String, String>>, cfg: Cfg) {
         // Lembretes: cada aviso é (re)notificado no máximo de X em X dias.
         val ctx = applicationContext
         val nPrefs = ctx.getSharedPreferences("garagem_notified", Context.MODE_PRIVATE)
@@ -145,7 +162,7 @@ class AlertWorker(ctx: Context, params: WorkerParameters) : Worker(ctx, params) 
         if (due.isEmpty()) {
             editor.apply()
             try { NotificationManagerCompat.from(ctx).cancel(1001) } catch (e: Exception) { }
-            return Result.success()
+            return
         }
 
         val needNotify = due.any { epochDay - nPrefs.getLong(it.first, -100000L) >= cfg.repeatDays }
@@ -154,7 +171,6 @@ class AlertWorker(ctx: Context, params: WorkerParameters) : Worker(ctx, params) 
             for (k in keys) editor.putLong(k, epochDay)
         }
         editor.apply()
-        return Result.success()
     }
 
     // Avisa quando está vencido ou dentro da antecedência definida (geral ou do próprio aviso).
@@ -179,6 +195,7 @@ class AlertWorker(ctx: Context, params: WorkerParameters) : Worker(ctx, params) 
 
         val d = days
         val k = kmLeft
+        cands.add(Cand(key, vehicle, title, dateStr, kmTarget, d, k, unitSuf, pref))
         val active = (d != null && d <= leadDays) || (k != null && k <= leadKm)
         if (!active) return
 
@@ -186,6 +203,125 @@ class AlertWorker(ctx: Context, params: WorkerParameters) : Worker(ctx, params) 
         if (d != null) parts.add(if (d < 0) "há ${-d} dias" else if (d == 0L) "hoje" else "em $d dias")
         if (k != null) parts.add(if (k <= 0) "já passou" else "faltam ${k.toInt()} $unitSuf")
         due.add(Pair(key, "$vehicle — $title (${parts.joinToString(" · ")})"))
+    }
+
+    private fun jsonInts(arr: JSONArray?, def: List<Int>): List<Int> {
+        if (arr == null) return def
+        val out = mutableListOf<Int>()
+        for (i in 0 until arr.length()) out.add(arr.optInt(i))
+        return out
+    }
+
+    private fun fmtDate(s: String): String {
+        val p = s.split("-")
+        return if (p.size == 3) "${p[2]}/${p[1]}/${p[0]}" else s
+    }
+
+    private fun setEmailStatus(msg: String) {
+        val stamp = SimpleDateFormat("dd/MM/yyyy HH:mm", Locale("pt", "PT")).format(Date())
+        applicationContext.getSharedPreferences("garagem_email_status", Context.MODE_PRIVATE)
+            .edit().putString("last", "$stamp — $msg").apply()
+    }
+
+    /**
+     * Emails de alerta. Datas de aviso configuráveis pelo utilizador:
+     *  - dias antes (lista geral, ou lista própria de cada aviso),
+     *  - km/horas que faltam (lista geral),
+     *  - repetição quando vencido (de X em X dias),
+     *  - datas extra em que se quer um aviso (por aviso).
+     * Cada limiar só é enviado uma vez por aviso e por data limite; se a data mudar, recomeça.
+     * Todos os avisos que disparam na mesma execução vão num só email, para todos os destinatários.
+     */
+    private fun processEmails(e: JSONObject?, smtp: SmtpCfg?, nowHour: Int, today: Calendar, todayStr: String) {
+        if (e == null || !e.optBoolean("on", false)) return
+        if (nowHour < e.optInt("hour", 8).coerceIn(0, 23)) return
+        val ctx = applicationContext
+        val toArr = e.optJSONArray("to")
+        val to = mutableListOf<String>()
+        if (toArr != null) for (i in 0 until toArr.length()) { val a = toArr.optString(i).trim(); if (a.contains("@")) to.add(a) }
+        if (to.isEmpty() || smtp == null || !smtp.ok()) return
+
+        val gDays = jsonInts(e.optJSONArray("days"), listOf(30, 14, 7, 3, 1, 0))
+        val gKm = jsonInts(e.optJSONArray("km"), listOf(1000, 500, 100, 0))
+        val overdueEvery = e.optInt("overdueEvery", 7).coerceAtLeast(0)
+
+        val sent = ctx.getSharedPreferences("garagem_emailed", Context.MODE_PRIVATE)
+        val lines = mutableListOf<String>()
+        val marks = mutableSetOf<String>()
+        val bases = mutableSetOf<String>()
+
+        for (c in cands) {
+            val pref = c.pref
+            if (pref != null && pref.optBoolean("noEmail", false)) continue
+            val base = "${c.key}|${c.dateStr}|${c.kmTarget.toLong()}"
+            bases.add(base)
+            val newMarks = mutableListOf<String>()
+            var fire = false
+
+            val dl = c.days
+            if (dl != null) {
+                val list = jsonInts(pref?.optJSONArray("emailDays"), gDays)
+                val trig = list.filter { dl <= it }
+                if (trig.isNotEmpty()) {
+                    if (!sent.contains("$base|d${trig.min()}")) fire = true
+                    trig.forEach { newMarks.add("$base|d$it") }
+                }
+                if (dl < 0 && overdueEvery > 0) {
+                    val kk = "$base|o${(-dl) / overdueEvery}"
+                    if (!sent.contains(kk)) fire = true
+                    newMarks.add(kk)
+                }
+            }
+            val kl = c.kmLeft
+            if (kl != null) {
+                val trig = gKm.filter { kl <= it }
+                if (trig.isNotEmpty()) {
+                    if (!sent.contains("$base|k${trig.min()}")) fire = true
+                    trig.forEach { newMarks.add("$base|k$it") }
+                }
+            }
+            val extra = pref?.optJSONArray("emailDates")
+            if (extra != null) {
+                for (i in 0 until extra.length()) {
+                    val ds = extra.optString(i)
+                    val dd = parseDate(ds) ?: continue
+                    val ago = daysBetween(dd, today)
+                    if (ago >= 0 && ago <= 3) {
+                        val kk = "$base|x$ds"
+                        if (!sent.contains(kk)) fire = true
+                        newMarks.add(kk)
+                    }
+                }
+            }
+            if (!fire) continue
+
+            val parts = mutableListOf<String>()
+            if (dl != null) {
+                val st = if (dl < 0) "vencido há ${-dl} dias" else if (dl == 0L) "vence hoje" else "vence em $dl dias"
+                parts.add(st + " (" + fmtDate(c.dateStr) + ")")
+            }
+            if (kl != null) parts.add(if (kl <= 0) "já passou ${c.kmTarget.toLong()} ${c.unitSuf}" else "faltam ${kl.toLong()} ${c.unitSuf}")
+            lines.add("• ${c.vehicle} — ${c.title}: ${parts.joinToString(" · ")}")
+            marks.addAll(newMarks)
+        }
+
+        // Esquece marcas de avisos que já não existem ou cuja data mudou
+        val ed = sent.edit()
+        for (kk in sent.all.keys) if (bases.none { kk.startsWith("$it|") }) ed.remove(kk)
+        ed.apply()
+        if (lines.isEmpty()) return
+
+        val subject = if (lines.size == 1) "RLTEC Ativos: 1 aviso de manutenção" else "RLTEC Ativos: ${lines.size} avisos de manutenção"
+        val body = "Avisos de manutenção:\n\n" + lines.joinToString("\n") + "\n\nEnviado automaticamente pela app RLTEC Ativos."
+        try {
+            Mailer.send(smtp, to, subject, body)
+            val ed2 = sent.edit()
+            marks.forEach { ed2.putLong(it, System.currentTimeMillis()) }
+            ed2.apply()
+            setEmailStatus("enviado: ${lines.size} aviso(s) para ${to.size} destinatário(s)")
+        } catch (ex: Exception) {
+            setEmailStatus("ERRO ao enviar: ${ex.message ?: ex.toString()}")
+        }
     }
 
     private fun notify(items: List<String>) {

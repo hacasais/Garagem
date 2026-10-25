@@ -33,10 +33,17 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
     kotlinOptions { jvmTarget = "17" }
+    packaging {
+        resources {
+            excludes += setOf("META-INF/NOTICE.md", "META-INF/LICENSE.md", "META-INF/LICENSE", "META-INF/NOTICE", "META-INF/DEPENDENCIES", "META-INF/INDEX.LIST")
+        }
+    }
 }
 dependencies {
     implementation("androidx.webkit:webkit:1.9.0")
     implementation("androidx.work:work-runtime-ktx:2.9.0")
     implementation("androidx.core:core-ktx:1.12.0")
     implementation("com.google.mlkit:text-recognition:16.0.1")
+    implementation("com.sun.mail:android-mail:1.6.7")
+    implementation("com.sun.mail:android-activation:1.6.7")
 }

@@ -1,4 +1,4 @@
-GARAGEM - APP ANDROID (ficheiro de dados único)
+RLTEC Ativos - APP ANDROID (ficheiro de dados único)
 
 O que faz
 - Grava sempre no MESMO ficheiro (que tu escolhes), sem criar (1), (2)...
@@ -10,13 +10,13 @@ Como obter o APK (conta GitHub gratuita, feito num computador)
 2. Descompacta este zip. No repositório, escolhe "Add file > Upload files" e arrasta TODO o conteúdo da pasta (inclui a pasta .github; se não a conseguires ver, ativa a vista de ficheiros ocultos).
    Se a pasta .github não subir: "Add file > Create new file", escreve o nome  .github/workflows/build.yml  e cola o conteúdo do ficheiro build.yml que está no zip.
 3. Separador "Actions": abre "Build APK" e, se não arrancar sozinho, "Run workflow". Demora uns 5 a 10 minutos.
-4. Quando ficar verde, abre a execução e descarrega o artefacto "garagem-apk" (vem em zip). Dentro está app-debug.apk.
+4. Quando ficar verde, abre a execução e descarrega o artefacto "rltec-ativos-apk" (vem em zip). Dentro está app-debug.apk.
 5. Copia o APK para o telemóvel, abre-o e permite instalar de "origens desconhecidas".
    Se o passo 3 falhar (vermelho), copia-me a mensagem de erro e eu corrijo.
 
 Primeira utilização
-1. Abre a Garagem > botão Cópia (ou "Escolher ficheiro" no aviso amarelo).
-2. "Criar ficheiro novo" (garagem-dados.json) numa pasta à tua escolha (Documentos, por exemplo).
+1. Abre a app RLTEC Ativos > botão Cópia (ou "Escolher ficheiro" no aviso amarelo).
+2. "Criar ficheiro novo" (rltec-ativos-dados.json) numa pasta à tua escolha (Documentos, por exemplo).
 3. A partir daí, cada alteração atualiza esse ficheiro.
 4. Telemóvel novo: instala o APK, copia o ficheiro, abre Cópia > "Escolher existente" e aceita "carregar os dados do ficheiro".
 
@@ -32,5 +32,5 @@ Avisos com a app fechada
 - Na primeira abertura, o Android pergunta se autorizas notificações — aceita, senão nunca recebes avisos.
 - Em segundo plano (a cada ~6 horas), a app lê o ficheiro de dados e verifica os avisos do plano de manutenção e os avisos manuais.
 - Só notifica quando algo está vencido, a menos de 14 dias, ou a menos de 500 km — para não incomodar com avisos distantes.
-- O Android pode atrasar esta verificação (poupança de bateria, "doze mode"), por isso não é um alarme exato ao minuto. Se o telemóvel tiver otimização de bateria agressiva para esta app, pode valer a pena desativá-la nas definições do sistema para a Garagem/RLTecAuto.
+- O Android pode atrasar esta verificação (poupança de bateria, "doze mode"), por isso não é um alarme exato ao minuto. Se o telemóvel tiver otimização de bateria agressiva para esta app, pode valer a pena desativá-la nas definições do sistema para o RLTEC Ativos/RLTecAuto.
 - Se nunca escolheste um ficheiro de dados (Cópia > Criar/Escolher), não há nada a verificar e não aparece nenhuma notificação.

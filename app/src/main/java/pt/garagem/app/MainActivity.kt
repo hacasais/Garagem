@@ -64,7 +64,7 @@ class MainActivity : Activity() {
                 val i = Intent(Intent.ACTION_CREATE_DOCUMENT).apply {
                     addCategory(Intent.CATEGORY_OPENABLE)
                     type = "application/json"
-                    putExtra(Intent.EXTRA_TITLE, "garagem-dados.json")
+                    putExtra(Intent.EXTRA_TITLE, "rltec-ativos-dados.json")
                     addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION or Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION)
                 }
                 startActivityForResult(i, 1)
@@ -102,6 +102,32 @@ class MainActivity : Activity() {
 
         @JavascriptInterface
         fun clearFile() { prefs.edit().remove("uri").apply() }
+
+        // ---- Emails de alerta (SMTP) ----
+        @JavascriptInterface
+        fun emailStatus(): String =
+            getSharedPreferences("garagem_email_status", MODE_PRIVATE).getString("last", "") ?: ""
+
+        @JavascriptInterface
+        fun emailTest(recipientsCsv: String, smtpJson: String) {
+            Thread {
+                val res = JSONObject()
+                try {
+                    val to = recipientsCsv.split(Regex("[,;\\s]+")).filter { it.contains("@") }
+                    val cfg = SmtpCfg.fromJson(JSONObject(smtpJson)) ?: throw Exception("Servidor de email por configurar")
+                    Mailer.send(
+                        cfg, to, "RLTEC Ativos: email de teste",
+                        "Este é um email de teste da app RLTEC Ativos.\nSe o recebeste, os avisos por email estão a funcionar."
+                    )
+                    res.put("ok", true).put("msg", "Email de teste enviado para ${to.size} destinatário(s).")
+                } catch (e: Exception) {
+                    res.put("ok", false).put("msg", e.message ?: e.toString())
+                }
+                runOnUiThread {
+                    web.evaluateJavascript("window.onEmailTest&&window.onEmailTest(${JSONObject.quote(res.toString())})", null)
+                }
+            }.start()
+        }
 
         @JavascriptInterface
         fun openDataUri(dataUri: String, filename: String) {
