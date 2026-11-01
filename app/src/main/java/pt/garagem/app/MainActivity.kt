@@ -370,4 +370,12 @@ class MainActivity : Activity() {
             }
         }
     }
+
+    // Botão "Voltar": a app decide (fecha janelas / volta ao menu principal); só sai quando já está no menu principal.
+    @Deprecated("Deprecated in Java")
+    override fun onBackPressed() {
+        web.evaluateJavascript("(function(){try{return window.appBack?window.appBack():false}catch(e){return false}})()") { r ->
+            if (r != "true") finish()
+        }
+    }
 }

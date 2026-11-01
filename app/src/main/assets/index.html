@@ -82,6 +82,7 @@ main{width:100%;min-width:0;overflow-x:clip}
 <div id="bn" role="alert"></div><main id="app"></main>
 <div id="lb" onclick="this.style.display='none'"><img alt="Fotografia ampliada"></div>
 <script>
+const ACTIONS=["Óleo motor","Filtro de óleo","Filtro de ar","Filtro do habitáculo","Filtro de combustível","Velas de ignição","Pastilhas de travão","Discos de travão","Líquido de travões","Líquido de refrigeração","Correia de acessórios","Kit de distribuição","Bateria","Escovas limpa-vidros","Lâmpadas","Pneus","Amortecedores","Embraiagem","Óleo da caixa","Óleo do diferencial","Alinhamento / geometria","Mão-de-obra"];
 const TYPES=["Revisão","Óleo e filtros","Pneus","Rotação de pneus","Travões","Bateria","Inspeção (IPO)","Seguro","Reparação","Alteração / extra","Lavagem / estética","Combustível","Outro"];
 const ASSETS=true,PH={},removed=new Set();
 let S={vehicles:[],sel:null,tab:"resumo"},LOAD="loading",lastJ="",meta={},q=Promise.resolve();
@@ -603,26 +604,31 @@ function editKm(){
 }
 function itemRowHtml(it){
   it=it||{};
-  return `<div class="card itemrow" style="padding:10px"><div class="row" style="gap:8px;align-items:flex-end"><div style="flex:1;min-width:0"><label style="margin-top:0">Ação</label><input name="iname" list="rectypelist" placeholder="Ex.: Filtro de óleo" value="${esc(it.name||"")}"></div><button type="button" class="btn del sm" onclick="this.closest('.itemrow').remove()">✕</button></div>
-  <div class="g2"><div><label>Marca / modelo</label><input name="ibrand" list="brandlist" value="${esc(it.brand||"")}"></div><div><label>Referência / qtd.</label><input name="iref" value="${esc(it.ref||"")}"></div></div></div>`;
+  const gb='class="btn ghost sm" style="padding:2px 8px;min-height:0;font-size:12px"';
+  return `<div class="card itemrow" style="padding:10px"><div class="row" style="align-items:baseline"><label style="margin:0">Ação</label><span style="display:flex;gap:6px"><button type="button" ${gb} onclick="manageActions()">Gerir</button><button type="button" class="btn del sm" style="padding:2px 10px;min-height:0" onclick="this.closest('.itemrow').remove()">✕</button></span></div>
+  <input name="iname" list="actlist" placeholder="Ex.: Filtro de óleo" value="${esc(it.name||"")}">
+  <div class="g2"><div><div class="row" style="align-items:baseline"><label style="margin-bottom:0">Marca / modelo</label><button type="button" ${gb} onclick="manageBrands()">Gerir</button></div><input name="ibrand" list="brandlist" value="${esc(it.brand||"")}"></div><div><label style="margin-bottom:0">Referência / qtd.</label><input name="iref" value="${esc(it.ref||"")}"></div></div></div>`;
 }
 function editRec(id,pre){
   const v=cur(),x=(v.records||[]).find(r=>r.id===id)||pre||{};
+  // Linhas de ações. A marca/modelo já não é do registo: registos antigos passam a mostrá-la como ação.
+  let rows=(x.items||[]).map(i=>({...i}));
+  if(x.brand){const same=rows.find(i=>normType(i.name)===normType(x.type));if(same){if(!same.brand)same.brand=x.brand}else rows.unshift({name:x.type||"",brand:x.brand})}
+  if(!rows.length)rows=[{name:!id&&x.type?x.type:""}];
   const tOnly=timeOnlyType(v,x.type);
   const d=sheet(`<h2>${id?"Editar registo":"Novo registo"}</h2>
   <div class="row" style="align-items:baseline"><label style="margin:0">Tipo</label><button type="button" class="btn ghost sm" style="padding:2px 10px;min-height:0" onclick="manageTypes()">Gerir lista</button></div>
   <input name="type" required list="rectypelist" placeholder="Escolhe ou escreve um tipo novo" value="${esc(x.type||"")}">
   <datalist id="rectypelist">${allTypes(v).map(t=>`<option value="${esc(t)}">`).join("")}</datalist>
   <div class="g2"><div><label>Data</label><input name="date" type="date" required value="${x.date||today()}"></div>${unitOf(v)!=="none"?`<div><label>${UNIT_NAME[unitOf(v)]}${tOnly?" (opcional)":""}</label><input name="km" type="number" inputmode="numeric" value="${x.km??(tOnly?"":v.km)??""}"></div>`:""}</div>
-  <div class="g2"><div><label>Custo (€)</label><input name="cost" type="number" step="0.01" inputmode="decimal" value="${x.cost??""}"></div>
-  <div><div class="row" style="align-items:baseline"><label style="margin:0">Marca / modelo</label><button type="button" class="btn ghost sm" style="padding:2px 8px;min-height:0;font-size:12px" onclick="manageBrands()">Gerir</button></div>
-  <input name="brand" list="brandlist" placeholder="Ex.: Michelin CrossClimate 2" value="${esc(x.brand||"")}"></div></div>
+  <label>Custo (€)</label><input name="cost" type="number" step="0.01" inputmode="decimal" value="${x.cost??""}">
   <datalist id="brandlist">${allBrands(v).map(t=>`<option value="${esc(t)}">`).join("")}</datalist>
+  <datalist id="actlist">${allActions(v).map(t=>`<option value="${esc(t)}">`).join("")}</datalist>
   <datalist id="shoplist">${allShops(v).map(t=>`<option value="${esc(t)}">`).join("")}</datalist>
   <label>Oficina (opcional)</label><input name="shop" list="shoplist" placeholder="Nome da oficina" value="${esc(x.shop||"")}">
   <h3 style="margin:18px 0 4px">Ações realizadas <span class="mut" style="font-weight:400">(opcional)</span></h3>
-  <p class="mut" style="margin:0 0 8px">Numa revisão, por exemplo: óleo, filtro de óleo, filtro do habitáculo… Cada ação fica registada com a sua marca/modelo, para saberes o que foi mudado e quando.</p>
-  <div id="itemRows">${(x.items||[]).map(itemRowHtml).join("")}</div>
+  <p class="mut" style="margin:0 0 8px">Numa revisão, por exemplo: óleo, filtro de óleo, filtro do habitáculo… Cada ação leva a sua marca/modelo, para saberes o que foi mudado e quando.</p>
+  <div id="itemRows">${rows.map(itemRowHtml).join("")}</div>
   <div class="acts" style="flex-wrap:wrap;margin-top:0"><button type="button" class="btn ghost sm" id="addItem">+ Adicionar ação</button><button type="button" class="btn ghost sm" id="copyItems">Copiar da última vez</button></div>
   <label style="display:flex;gap:10px;align-items:center;margin-top:14px"><input type="checkbox" name="oneoff" ${x.oneOff?"checked":""} style="width:22px;min-height:0"> Substituição pontual (ex.: defeito de fábrica) — não contar para previsões por histórico</label>
   <label>Notas</label><textarea name="notes" rows="3">${esc(x.notes)}</textarea>
@@ -631,7 +637,7 @@ function editRec(id,pre){
   <div class="acts"><button type="button" class="btn ghost" data-close>Cancelar</button><button class="btn">Guardar</button></div>
   ${id?`<div class="acts"><button type="button" class="btn del" onclick="delRec('${id}')">Apagar registo</button></div>`:""}`,
   async(f,form)=>{const ph=await files(form,"ph");const o=id?x:{id:uid(),photos:[]};
-    Object.assign(o,{type:(f.get("type")||"").trim(),date:f.get("date"),km:Number(f.get("km"))||0,cost:Number(f.get("cost"))||0,brand:(f.get("brand")||"").trim(),oneOff:!!f.get("oneoff"),notes:f.get("notes"),shop:(f.get("shop")||"").trim(),
+    Object.assign(o,{type:(f.get("type")||"").trim(),date:f.get("date"),km:Number(f.get("km"))||0,cost:Number(f.get("cost"))||0,brand:"",oneOff:!!f.get("oneoff"),notes:f.get("notes"),shop:(f.get("shop")||"").trim(),
       items:(()=>{const nm=f.getAll("iname"),br=f.getAll("ibrand"),rf=f.getAll("iref");return nm.map((n,i)=>({name:(n||"").trim(),brand:(br[i]||"").trim(),ref:(rf[i]||"").trim()})).filter(i=>i.name)})()});o.photos=[...(o.photos||[]),...ph];
     if(!id){
       v.records.push(o);
@@ -1046,7 +1052,20 @@ function resetPlanPrefs(v,type){(v.plan||[]).filter(p=>normType(p.type)===normTy
 function LST(v){
   v=v||cur();
   if(!v.lists)v.lists={types:[...(meta.typesCustom||[])],typesRemoved:[...(meta.typesRemoved||[])],brands:[...(meta.brandsCustom||[])],brandsRemoved:[...(meta.brandsRemoved||[])]};
+  v.lists.actions=v.lists.actions||[];v.lists.actionsRemoved=v.lists.actionsRemoved||[];
   return v.lists;
+}
+function baseActions(v){
+  const L=LST(v),out=ACTIONS.filter(t=>!L.actionsRemoved.includes(t));
+  L.actions.forEach(t=>{if(t&&!out.includes(t))out.push(t)});
+  return out.sort((a,b)=>a.localeCompare(b,"pt"));
+}
+// Ações (peças/operações dentro de um registo): só as deste ativo — lista base + plano + ações já registadas.
+function allActions(v){
+  v=v||cur();const extra=[];
+  if(v){(v.plan||[]).forEach(p=>extra.push(p.type));(v.records||[]).forEach(r=>(r.items||[]).forEach(i=>extra.push(i.name)))}
+  const out=[...baseActions(v)];extra.forEach(t=>{t=(t||"").trim();if(t&&!out.includes(t))out.push(t)});
+  return out.sort((a,b)=>a.localeCompare(b,"pt"));
 }
 function baseTypes(v){
   const L=LST(v),removed=L.typesRemoved||[],custom=L.types||[];
@@ -1054,10 +1073,10 @@ function baseTypes(v){
   custom.forEach(t=>{if(t&&!out.includes(t))out.push(t)});
   return out.sort((a,b)=>a.localeCompare(b,"pt"));
 }
-// Tipos/ações sugeridos: só os deste ativo (lista base + plano + histórico de registos e ações).
+// Tipos de registo sugeridos (Revisão, Reparação…): só os deste ativo. As ações têm lista própria (allActions).
 function allTypes(v){
   v=v||cur();const extra=[];
-  if(v){(v.plan||[]).forEach(p=>extra.push(p.type));(v.records||[]).forEach(r=>{extra.push(r.type);(r.items||[]).forEach(i=>extra.push(i.name))})}
+  if(v)(v.records||[]).forEach(r=>extra.push(r.type));
   const out=[...baseTypes(v)];extra.forEach(t=>{t=(t||"").trim();if(t&&!out.includes(t))out.push(t)});return out.sort((a,b)=>a.localeCompare(b,"pt"));
 }
 function allShops(v){
@@ -1323,6 +1342,12 @@ function allBrands(v){
   return out.sort((a,b)=>a.localeCompare(b,"pt"));
 }
 let _mgSheet=null;
+function refreshLists(){
+  const v=cur();if(!v)return;
+  const set=(id,arr)=>{const el=document.getElementById(id);if(el)el.innerHTML=arr.map(t=>`<option value="${esc(t)}">`).join("")};
+  set("rectypelist",allTypes(v));set("actlist",allActions(v));set("brandlist",allBrands(v));
+  set("typelist",[...new Set([...allTypes(v),...allActions(v)])].sort((a,b)=>a.localeCompare(b,"pt")));
+}
 function manageBrands(){
   _mgSheet&&_mgSheet.remove();
   const list=baseBrands();
@@ -1334,7 +1359,7 @@ function manageBrands(){
     const val=(d.querySelector("#newbrand").value||"").trim();if(!val)return;
     LST().brandsRemoved=(LST().brandsRemoved||[]).filter(x=>x!==val);
     LST().brands=[...new Set([...(LST().brands||[]),val])];
-    save();
+    save();refreshLists();
     manageBrands();
   };
 }
@@ -1342,7 +1367,7 @@ async function removeBrand(i){
   const list=baseBrands(),t=list[i];if(t===undefined)return;
   LST().brandsRemoved=[...new Set([...(LST().brandsRemoved||[]),t])];
   LST().brands=(LST().brands||[]).filter(x=>x!==t);
-  save();
+  save();refreshLists();
   manageBrands();
 }
 function manageTypes(){
@@ -1356,7 +1381,7 @@ function manageTypes(){
     const val=(d.querySelector("#newtype").value||"").trim();if(!val)return;
     LST().typesRemoved=(LST().typesRemoved||[]).filter(x=>x!==val);
     LST().types=[...new Set([...(LST().types||[]),val])];
-    save();
+    save();refreshLists();
     manageTypes();
   };
 }
@@ -1364,8 +1389,30 @@ async function removeType(i){
   const list=baseTypes(),t=list[i];if(t===undefined)return;
   LST().typesRemoved=[...new Set([...(LST().typesRemoved||[]),t])];
   LST().types=(LST().types||[]).filter(x=>x!==t);
-  save();
+  save();refreshLists();
   manageTypes();
+}
+function manageActions(){
+  _mgSheet&&_mgSheet.remove();
+  const list=baseActions();
+  const d=_mgSheet=sheet(`<h2>Gerir ações</h2><p class="mut">Ações são as peças ou operações feitas dentro de um registo (óleo, filtro de óleo, pastilhas…). A lista é só deste ativo. Apagar uma ação aqui não apaga registos já criados com ela.</p>
+  ${list.length?list.map((t,i)=>`<div class="card"><div class="row"><strong>${esc(t)}</strong><button type="button" class="btn del sm" onclick="removeAction(${i})">Apagar</button></div></div>`).join(""):`<div class="empty">Sem ações definidas.</div>`}
+  <label style="margin-top:14px">Adicionar ação nova</label><div class="g2"><input id="newaction" placeholder="Ex.: Filtro de partículas"><button type="button" class="btn" id="addaction">Adicionar</button></div>
+  <div class="acts"><button type="button" class="btn ghost" data-close>Fechar</button></div>`,()=>{});
+  d.querySelector("#addaction").onclick=async()=>{
+    const val=(d.querySelector("#newaction").value||"").trim();if(!val)return;
+    LST().actionsRemoved=(LST().actionsRemoved||[]).filter(x=>x!==val);
+    LST().actions=[...new Set([...(LST().actions||[]),val])];
+    save();refreshLists();
+    manageActions();
+  };
+}
+async function removeAction(i){
+  const list=baseActions(),t=list[i];if(t===undefined)return;
+  LST().actionsRemoved=[...new Set([...(LST().actionsRemoved||[]),t])];
+  LST().actions=(LST().actions||[]).filter(x=>x!==t);
+  save();refreshLists();
+  manageActions();
 }
 function planSheet(){
   const v=cur();document.querySelectorAll(".sheet").forEach(s=>s.remove());
@@ -1383,7 +1430,7 @@ function editPlan(id){
   sheet(`<h2>${id?"Editar intervenção":"Nova intervenção"}</h2>
   <div class="row" style="align-items:baseline"><label style="margin:0">Nome da intervenção</label><button type="button" class="btn ghost sm" style="padding:2px 10px;min-height:0" onclick="manageTypes()">Gerir lista</button></div>
   <input name="type" required list="typelist" placeholder="Ex.: Óleo do diferencial" value="${esc(p.type||"")}">
-  <datalist id="typelist">${allTypes(v).map(t=>`<option value="${esc(t)}">`).join("")}</datalist>
+  <datalist id="typelist">${[...new Set([...allTypes(v),...allActions(v)])].sort((a,b)=>a.localeCompare(b,"pt")).map(t=>`<option value="${esc(t)}">`).join("")}</datalist>
   ${hasCounter?`<label style="margin-top:14px">Controlar por</label>
   <div style="display:flex;gap:16px;flex-wrap:wrap;margin-top:4px">${modeRow("km",UNIT_NAME[u])}${modeRow("meses","Tempo")}${modeRow("ambos","Ambos")}</div>`:""}
   <div class="g2" style="margin-top:10px">
@@ -1415,6 +1462,15 @@ function editPlan(id){
     if(!id){v.plan=v.plan||defPlan();v.plan.push(o)}setTimeout(planSheet,50)});
 }
 function delPlan(id){const v=cur();v.plan=v.plan.filter(p=>p.id!==id);render();planSheet()}
+// Botão "Voltar" do Android: fecha o que estiver aberto (imagem, janela, ativo) e só sai da app no menu principal.
+window.appBack=function(){
+  const lb=document.getElementById("lb");
+  if(lb&&getComputedStyle(lb).display!=="none"){lb.style.display="none";return true}
+  const sh=document.querySelectorAll(".sheet");
+  if(sh.length){sh[sh.length-1].remove();return true}
+  if(S.sel){S.sel=null;render();return true}
+  return false;
+};
 function zoom(s){const l=$("#lb");l.querySelector("img").src=s;l.style.display="grid"}
 function backup(){
   const last=meta.lastBackup?new Date(meta.lastBackup).toLocaleDateString("pt-PT")+" "+new Date(meta.lastBackup).toLocaleTimeString("pt-PT",{hour:"2-digit",minute:"2-digit"}):"nunca";
