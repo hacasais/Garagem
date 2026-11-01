@@ -104,6 +104,36 @@ class MainActivity : Activity() {
         fun clearFile() { prefs.edit().remove("uri").apply() }
 
         // ---- Emails de alerta (SMTP) ----
+        // ---- Início de sessão Microsoft (Outlook) ----
+        @JavascriptInterface
+        fun msLoginStart(clientId: String) {
+            Thread {
+                try {
+                    val st = MsMailer.deviceStart(clientId.trim())
+                    val info = JSONObject()
+                        .put("code", st.optString("user_code"))
+                        .put("uri", st.optString("verification_uri", "https://www.microsoft.com/link"))
+                    runOnUiThread { web.evaluateJavascript("window.onMsLogin&&window.onMsLogin(${JSONObject.quote(info.toString())})", null) }
+                    val r = MsMailer.devicePoll(clientId.trim(), st)
+                    val done = JSONObject().put("done", true).put("refresh", r.optString("refresh")).put("user", r.optString("user"))
+                    runOnUiThread { web.evaluateJavascript("window.onMsLogin&&window.onMsLogin(${JSONObject.quote(done.toString())})", null) }
+                } catch (e: Exception) {
+                    val err = JSONObject().put("error", e.message ?: e.toString())
+                    runOnUiThread { web.evaluateJavascript("window.onMsLogin&&window.onMsLogin(${JSONObject.quote(err.toString())})", null) }
+                }
+            }.start()
+        }
+
+        @JavascriptInterface
+        fun msCurrent(jsonRefresh: String): String = MsMailer.currentRefresh(this@MainActivity, jsonRefresh)
+
+        @JavascriptInterface
+        fun openUrl(url: String) {
+            try {
+                if (url.startsWith("https://")) startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+            } catch (e: Exception) { }
+        }
+
         @JavascriptInterface
         fun emailStatus(): String =
             getSharedPreferences("garagem_email_status", MODE_PRIVATE).getString("last", "") ?: ""
@@ -116,7 +146,7 @@ class MainActivity : Activity() {
                     val to = recipientsCsv.split(Regex("[,;\\s]+")).filter { it.contains("@") }
                     val cfg = SmtpCfg.fromJson(JSONObject(smtpJson)) ?: throw Exception("Servidor de email por configurar")
                     Mailer.send(
-                        cfg, to, "RLTEC Ativos: email de teste",
+                        this@MainActivity, cfg, to, "RLTEC Ativos: email de teste",
                         "Este é um email de teste da app RLTEC Ativos.\nSe o recebeste, os avisos por email estão a funcionar."
                     )
                     res.put("ok", true).put("msg", "Email de teste enviado para ${to.size} destinatário(s).")

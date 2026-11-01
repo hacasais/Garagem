@@ -189,6 +189,7 @@ async function init(){
     await new Promise(res=>{const c=d.transaction("photos").objectStore("photos").openCursor();c.onsuccess=()=>{const u=c.result;if(u){PH[u.key]=u.value;u.continue()}else res()};c.onerror=()=>res()});
     try{navigator.storage&&navigator.storage.persist&&navigator.storage.persist()}catch(e){}
     await restorePhotosFromFile();
+    syncMsToken();
     LOAD="ok";render();
   }catch(e){LOAD="off";render()}
 }
@@ -293,21 +294,22 @@ function resumo(v){
 function registos(v){
   const all=[...(v.records||[])];
   if(!all.length)return `<div class="empty">Sem registos. Guarda aqui revisões, reparações, alterações e fotografias.</div>`;
-  const types=[...new Set(all.map(x=>x.type))].sort((a,b)=>a.localeCompare(b,"pt"));
+  const types=[...new Set(all.flatMap(x=>[x.type,...(x.items||[]).map(i=>i.name)]).filter(Boolean))].sort((a,b)=>a.localeCompare(b,"pt"));
   const filt=S.recFilter&&types.includes(S.recFilter)?S.recFilter:"";
   const sel=`<select onchange="S.recFilter=this.value;render()" style="margin-bottom:12px">
     <option value=""${filt?"":" selected"}>Todos os componentes</option>
     ${types.map(t=>`<option value="${esc(t)}"${t===filt?" selected":""}>${esc(t)}</option>`).join("")}
   </select>`;
-  const r=(filt?all.filter(x=>x.type===filt):all).sort((a,b)=>b.date.localeCompare(a.date)||b.km-a.km);
+  const r=(filt?all.filter(x=>x.type===filt||(x.items||[]).some(i=>i.name===filt)):all).sort((a,b)=>b.date.localeCompare(a.date)||b.km-a.km);
   if(!r.length)return sel+`<div class="empty">Sem registos deste componente.</div>`;
   const byYear={};r.forEach(x=>{const y=(x.date||"").slice(0,4)||"—";(byYear[y]=byYear[y]||[]).push(x)});
   const years=Object.keys(byYear).sort((a,b)=>b.localeCompare(a));
   const card=x=>`<div class="card">
     <div class="row">
-      <div><div style="font-weight:700;font-size:15px">${fmtD(x.date)}</div><div class="mut" style="margin-top:2px">${esc(x.type)}${x.brand?` · ${esc(x.brand)}`:""}${x.oneOff?' · <span title="Não conta para previsões">pontual</span>':""}</div></div>
+      <div><div style="font-weight:700;font-size:15px">${fmtD(x.date)}</div><div class="mut" style="margin-top:2px">${esc(x.type)}${x.brand?` · ${esc(x.brand)}`:""}${x.oneOff?' · <span title="Não conta para previsões">pontual</span>':""}</div>${x.shop?`<div class="mut" style="margin-top:2px">🔧 ${esc(x.shop)}</div>`:""}</div>
       <div style="text-align:right">${x.km?`<div class="num" style="font-size:15px">${fmtCounterN(x.km,unitOf(v))}</div>`:""}${x.cost?`<div class="mut">${fmtEur(x.cost)}</div>`:""}</div>
     </div>
+    ${(x.items||[]).length?`<div style="margin:8px 0 0;font-size:14px">${x.items.map(i=>`<div>• <strong>${esc(i.name)}</strong>${i.brand?` — ${esc(i.brand)}`:""}${i.ref?` <span class="mut">(${esc(i.ref)})</span>`:""}</div>`).join("")}</div>`:""}
     ${x.notes?`<p style="margin:8px 0 0;font-size:14px">${esc(x.notes)}</p>`:""}
     ${(x.photos||[]).length?`<div class="photos">${x.photos.map((p,i)=>attItem(p,i)).join("")}</div>`:""}
     <div class="acts" style="margin-top:10px"><button class="btn ghost sm" onclick="editRec('${x.id}')">Editar</button></div></div>`;
@@ -326,7 +328,7 @@ function predictedAlerts(v){
   const groups=groupLifespans(partLifespans(v));
   const byKey={};groups.forEach(g=>{byKey[g.type+"||"+g.brand]=g});
   const latest={};
-  (v.records||[]).forEach(r=>{if(r.type&&r.date&&(!latest[r.type]||r.date>latest[r.type].date))latest[r.type]=r});
+  recEvents(v).forEach(r=>{if(r.type&&r.date&&(!latest[r.type]||r.date>latest[r.type].date))latest[r.type]=r});
   const out=[];
   Object.values(latest).forEach(last=>{
     const brand=(last.brand||"").trim()||"—";
@@ -599,30 +601,42 @@ function editKm(){
     try{Android.scanOdometer()}catch(e){m.textContent="Não foi possível abrir a câmara."}
   };
 }
+function itemRowHtml(it){
+  it=it||{};
+  return `<div class="card itemrow" style="padding:10px"><div class="row" style="gap:8px;align-items:flex-end"><div style="flex:1;min-width:0"><label style="margin-top:0">Ação</label><input name="iname" list="rectypelist" placeholder="Ex.: Filtro de óleo" value="${esc(it.name||"")}"></div><button type="button" class="btn del sm" onclick="this.closest('.itemrow').remove()">✕</button></div>
+  <div class="g2"><div><label>Marca / modelo</label><input name="ibrand" list="brandlist" value="${esc(it.brand||"")}"></div><div><label>Referência / qtd.</label><input name="iref" value="${esc(it.ref||"")}"></div></div></div>`;
+}
 function editRec(id,pre){
   const v=cur(),x=(v.records||[]).find(r=>r.id===id)||pre||{};
   const tOnly=timeOnlyType(v,x.type);
-  sheet(`<h2>${id?"Editar registo":"Novo registo"}</h2>
+  const d=sheet(`<h2>${id?"Editar registo":"Novo registo"}</h2>
   <div class="row" style="align-items:baseline"><label style="margin:0">Tipo</label><button type="button" class="btn ghost sm" style="padding:2px 10px;min-height:0" onclick="manageTypes()">Gerir lista</button></div>
   <input name="type" required list="rectypelist" placeholder="Escolhe ou escreve um tipo novo" value="${esc(x.type||"")}">
-  <datalist id="rectypelist">${allTypes().map(t=>`<option value="${esc(t)}">`).join("")}</datalist>
+  <datalist id="rectypelist">${allTypes(v).map(t=>`<option value="${esc(t)}">`).join("")}</datalist>
   <div class="g2"><div><label>Data</label><input name="date" type="date" required value="${x.date||today()}"></div>${unitOf(v)!=="none"?`<div><label>${UNIT_NAME[unitOf(v)]}${tOnly?" (opcional)":""}</label><input name="km" type="number" inputmode="numeric" value="${x.km??(tOnly?"":v.km)??""}"></div>`:""}</div>
   <div class="g2"><div><label>Custo (€)</label><input name="cost" type="number" step="0.01" inputmode="decimal" value="${x.cost??""}"></div>
   <div><div class="row" style="align-items:baseline"><label style="margin:0">Marca / modelo</label><button type="button" class="btn ghost sm" style="padding:2px 8px;min-height:0;font-size:12px" onclick="manageBrands()">Gerir</button></div>
   <input name="brand" list="brandlist" placeholder="Ex.: Michelin CrossClimate 2" value="${esc(x.brand||"")}"></div></div>
-  <datalist id="brandlist">${allBrands().map(t=>`<option value="${esc(t)}">`).join("")}</datalist>
+  <datalist id="brandlist">${allBrands(v).map(t=>`<option value="${esc(t)}">`).join("")}</datalist>
+  <datalist id="shoplist">${allShops(v).map(t=>`<option value="${esc(t)}">`).join("")}</datalist>
+  <label>Oficina (opcional)</label><input name="shop" list="shoplist" placeholder="Nome da oficina" value="${esc(x.shop||"")}">
+  <h3 style="margin:18px 0 4px">Ações realizadas <span class="mut" style="font-weight:400">(opcional)</span></h3>
+  <p class="mut" style="margin:0 0 8px">Numa revisão, por exemplo: óleo, filtro de óleo, filtro do habitáculo… Cada ação fica registada com a sua marca/modelo, para saberes o que foi mudado e quando.</p>
+  <div id="itemRows">${(x.items||[]).map(itemRowHtml).join("")}</div>
+  <div class="acts" style="flex-wrap:wrap;margin-top:0"><button type="button" class="btn ghost sm" id="addItem">+ Adicionar ação</button><button type="button" class="btn ghost sm" id="copyItems">Copiar da última vez</button></div>
   <label style="display:flex;gap:10px;align-items:center;margin-top:14px"><input type="checkbox" name="oneoff" ${x.oneOff?"checked":""} style="width:22px;min-height:0"> Substituição pontual (ex.: defeito de fábrica) — não contar para previsões por histórico</label>
-  <label>Notas (oficina, peças, referências…)</label><textarea name="notes" rows="3">${esc(x.notes)}</textarea>
+  <label>Notas</label><textarea name="notes" rows="3">${esc(x.notes)}</textarea>
   ${ASSETS?`<label>Fotografias e documentos (recibos, peças, PDF…)</label><input name="ph" type="file" accept="image/*,application/pdf" multiple>`:""}
   ${id&&(x.photos||[]).length?`<div class="acts" style="margin-top:6px"><button type="button" class="btn ghost sm" onclick="manageRecAtt('${id}')">Gerir ${x.photos.length} anexo${x.photos.length>1?"s":""}</button></div>`:""}
   <div class="acts"><button type="button" class="btn ghost" data-close>Cancelar</button><button class="btn">Guardar</button></div>
   ${id?`<div class="acts"><button type="button" class="btn del" onclick="delRec('${id}')">Apagar registo</button></div>`:""}`,
   async(f,form)=>{const ph=await files(form,"ph");const o=id?x:{id:uid(),photos:[]};
-    Object.assign(o,{type:(f.get("type")||"").trim(),date:f.get("date"),km:Number(f.get("km"))||0,cost:Number(f.get("cost"))||0,brand:(f.get("brand")||"").trim(),oneOff:!!f.get("oneoff"),notes:f.get("notes")});o.photos=[...(o.photos||[]),...ph];
+    Object.assign(o,{type:(f.get("type")||"").trim(),date:f.get("date"),km:Number(f.get("km"))||0,cost:Number(f.get("cost"))||0,brand:(f.get("brand")||"").trim(),oneOff:!!f.get("oneoff"),notes:f.get("notes"),shop:(f.get("shop")||"").trim(),
+      items:(()=>{const nm=f.getAll("iname"),br=f.getAll("ibrand"),rf=f.getAll("iref");return nm.map((n,i)=>({name:(n||"").trim(),brand:(br[i]||"").trim(),ref:(rf[i]||"").trim()})).filter(i=>i.name)})()});o.photos=[...(o.photos||[]),...ph];
     if(!id){
       v.records.push(o);
       if(pre?.fromAlert&&v.alertPrefs)delete v.alertPrefs[pre.fromAlert];
-      resetPlanPrefs(v,o.type);
+      (v.plan||[]).filter(p=>recHas(o,p.type)).forEach(p=>setPref(v,"plan:"+p.id,{snoozeUntil:null,date:null,km:null}));
       advanceFixedPlans(v,o);
       if(pre?.fromAlert)v.alerts=v.alerts.filter(a=>a.id!==pre.fromAlert);
       if(pre?.clearPlanNote){const pl=(v.plan||[]).find(x=>x.id===pre.clearPlanNote);if(pl)pl.note=""}
@@ -630,6 +644,13 @@ function editRec(id,pre){
         setTimeout(()=>editRec(null,{date:o.date,km:o.km}),50);
     }
     if(o.km>(v.km||0))v.km=o.km;S.tab="registos"});
+  d.querySelector("#addItem").onclick=()=>{d.querySelector("#itemRows").insertAdjacentHTML("beforeend",itemRowHtml({}))};
+  d.querySelector("#copyItems").onclick=()=>{
+    const t=normType(d.querySelector("[name=type]").value);
+    const last=(v.records||[]).filter(r=>(r.items||[]).length&&(!t||normType(r.type)===t)&&r.id!==id).sort((a,b)=>b.date.localeCompare(a.date))[0];
+    if(!last){alert("Não há ações anteriores"+(t?" deste tipo":"")+" neste ativo.");return}
+    d.querySelector("#itemRows").innerHTML=last.items.map(i=>itemRowHtml(i)).join("");
+  };
 }
 function delRec(id){if(confirm("Apagar este registo?")){const v=cur();v.records=v.records.filter(r=>r.id!==id);document.querySelector(".sheet")?.remove();render()}}
 function editAlert(id){
@@ -753,6 +774,7 @@ function smtpPreset(k){
 function emailSheet(){
   if(!window.Android||!Android.emailTest){alert("Os emails de alerta só funcionam na app Android.");return}
   const c=emailCfg(),sm=meta.smtp||{};
+  let ms={...(sm.ms||{})};
   let status="";try{status=Android.emailStatus()||""}catch(e){}
   const d=sheet(`<h2>✉️ Emails de alerta</h2>
   <label style="display:flex;gap:10px;align-items:center;margin-top:6px"><input type="checkbox" name="eon" ${c.on?"checked":""} style="width:22px;min-height:0"> Enviar emails de alerta (também com a app fechada)</label>
@@ -763,14 +785,24 @@ function emailSheet(){
   <p class="mut">Cada valor envia um email, uma só vez por aviso. O 0 avisa no próprio dia / quando o contador chega ao valor. Cada aviso pode ter as suas datas em Gerir.</p>
   <div class="g2"><div><label>Se vencido, repetir (dias)</label><input name="eover" type="number" inputmode="numeric" min="0" value="${c.overdueEvery??7}"></div><div><label>Enviar a partir das (h)</label><input name="ehour" type="number" inputmode="numeric" min="0" max="23" value="${c.hour??8}"></div></div>
   <p class="mut">0 em "repetir" = não repetir. Os avisos que disparam na mesma altura vão num só email para todos os destinatários.</p>
-  <h3 style="margin:18px 0 6px">Servidor de envio (SMTP)</h3>
-  <label>Modelo</label><select onchange="smtpPreset(this.value)"><option value="">Outro / manual</option><option value="gmail">Gmail</option><option value="outlook">Outlook / Hotmail</option><option value="office365">Microsoft 365</option><option value="sapo">SAPO</option></select>
+  <h3 style="margin:18px 0 6px">Conta de envio</h3>
+  <label>Tipo de conta</label><select name="smode" onchange="smtpMode(this.value)"><option value="password" ${sm.mode!=="microsoft"?"selected":""}>Servidor SMTP (Gmail, SAPO…) — utilizador e palavra-passe</option><option value="microsoft" ${sm.mode==="microsoft"?"selected":""}>Outlook / Hotmail / Microsoft 365 — iniciar sessão</option></select>
+  <div id="boxPass" style="display:${sm.mode==="microsoft"?"none":""}">
+  <label>Modelo</label><select onchange="smtpPreset(this.value)"><option value="">Outro / manual</option><option value="gmail">Gmail</option><option value="sapo">SAPO</option></select>
   <div class="g2"><div><label>Servidor</label><input name="host" value="${esc(sm.host||"")}" placeholder="smtp.gmail.com" autocapitalize="off"></div><div><label>Porta</label><input name="port" type="number" inputmode="numeric" value="${sm.port||465}"></div></div>
   <label>Segurança</label><select name="sec"><option value="ssl" ${sm.security!=="starttls"?"selected":""}>SSL/TLS (porta 465)</option><option value="starttls" ${sm.security==="starttls"?"selected":""}>STARTTLS (porta 587)</option></select>
   <label>Utilizador (email da conta)</label><input name="suser" type="email" value="${esc(sm.user||"")}" autocapitalize="off">
   <label>Palavra-passe</label><input name="spass" type="password" autocomplete="off" value="${esc(sm.pass||"")}">
   <label>Remetente (opcional)</label><input name="sfrom" type="email" value="${esc(sm.from||"")}" placeholder="igual ao utilizador" autocapitalize="off">
   <p class="mut">Gmail: ativa a verificação em 2 passos e cria uma «palavra-passe de app» em myaccount.google.com/apppasswords; usa essa palavra-passe aqui, não a normal. <b>Atenção:</b> estes dados, incluindo a palavra-passe, ficam gravados em texto simples no ficheiro de dados, para funcionarem noutro telemóvel. Quem tiver o ficheiro consegue lê-los. Usa de preferência uma conta de email só para os avisos, ou uma palavra-passe de app (que podes revogar a qualquer momento), e não partilhes o ficheiro.</p>
+  </div>
+  <div id="boxMs" style="display:${sm.mode==="microsoft"?"":"none"}">
+  <p class="mut">A Microsoft já não aceita palavra-passe por SMTP; o início de sessão é feito no site da Microsoft. É preciso registar uma vez uma aplicação gratuita em portal.azure.com (Microsoft Entra ID &gt; Registos de aplicações &gt; Novo registo; contas: «Contas em qualquer diretório organizacional e contas Microsoft pessoais»; Autenticação &gt; «Permitir fluxos de cliente público» = Sim; Permissões de API &gt; Microsoft Graph &gt; Delegadas &gt; Mail.Send e User.Read) e copiar o «ID da aplicação (cliente)» para aqui.</p>
+  <label>ID da aplicação (cliente)</label><input name="mscid" value="${esc((sm.ms||{}).clientId||"")}" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" autocapitalize="off" autocomplete="off">
+  <div class="acts"><button type="button" class="btn ghost" id="mslogin">Iniciar sessão na Microsoft</button></div>
+  <p class="mut" id="msstat">${(sm.ms||{}).refresh?"✅ Sessão iniciada"+((sm.ms||{}).user?": "+esc(sm.ms.user):""):"Sem sessão iniciada."}</p>
+  <p class="mut"><b>Atenção:</b> a autorização fica gravada no ficheiro de dados (para funcionar noutro telemóvel). Quem tiver o ficheiro pode enviar emails em teu nome; não o partilhes. Podes revogar o acesso em account.microsoft.com/privacy (Aplicações e serviços).</p>
+  </div>
   <div class="acts"><button type="button" class="btn ghost" id="etest">Enviar email de teste</button></div>
   <p class="mut" id="estat">${status?"Último envio automático: "+esc(status):""}</p>
   <div class="acts"><button type="button" class="btn ghost" data-close>Cancelar</button><button class="btn">Guardar</button></div>`,
@@ -780,14 +812,28 @@ function emailSheet(){
     const bad=emailBad(f.get("eto"));if(bad.length){alert("Email inválido: "+bad.join(", "));throw new Error("cancel")}
     const days=parseNums(f.get("edays")),km=parseNums(f.get("ekm"));
     meta.alertCfg={...(meta.alertCfg||{}),email:{on:!!f.get("eon"),to,days,km,overdueEvery:Math.max(0,Number(f.get("eover"))||0),hour:Math.min(23,Math.max(0,Number(f.get("ehour"))||0))}};
-    meta.smtp=smtpFrom(f);
+    meta.smtp=smtpFrom(f,ms);
     await saveMeta();
   });
   d.querySelector("#etest").onclick=()=>{
     const f=new FormData(d.querySelector("form")),to=parseEmails(f.get("eto"));
     if(!to.length){alert("Indica pelo menos um destinatário.");return}
     d.querySelector("#estat").textContent="A enviar email de teste…";
-    Android.emailTest(to.join(","),JSON.stringify(smtpFrom(f)));
+    Android.emailTest(to.join(","),JSON.stringify(smtpFrom(f,ms)));
+  };
+  d.querySelector("#mslogin").onclick=()=>{
+    const cid=(d.querySelector('[name=mscid]').value||"").trim();
+    if(!cid){alert("Indica primeiro o ID da aplicação (cliente).");return}
+    ms.clientId=cid;
+    d.querySelector("#msstat").textContent="A contactar a Microsoft…";
+    Android.msLoginStart(cid);
+  };
+  window.onMsLogin=r=>{
+    try{r=JSON.parse(r)}catch(e){return}
+    const el=document.querySelector("#msstat");if(!el)return;
+    if(r.error){el.textContent="❌ "+r.error;return}
+    if(r.done){ms={clientId:ms.clientId,refresh:r.refresh,user:r.user};el.textContent="✅ Sessão iniciada"+(r.user?": "+r.user:"")+". Toca em Guardar.";return}
+    el.innerHTML="Abre <b>"+esc(r.uri)+"</b> e escreve o código <b style=\"font-size:22px;letter-spacing:2px\">"+esc(r.code)+"</b> &nbsp;<button type=\"button\" class=\"btn ghost sm\" onclick=\"Android.openUrl('"+esc(r.uri)+"')\">Abrir</button><br>Depois inicia sessão e aceita. Esta janela atualiza sozinha.";
   };
   window.onEmailTest=r=>{
     try{r=JSON.parse(r)}catch(e){return}
@@ -797,8 +843,21 @@ function emailSheet(){
 }
 function parseEmails(s){return [...new Set(String(s||"").split(/[;,\s]+/).map(x=>x.trim()).filter(validEmail))]}
 function emailBad(s){return String(s||"").split(/[;,\s]+/).map(x=>x.trim()).filter(x=>x&&!validEmail(x))}
-function smtpFrom(f){
-  return{host:(f.get("host")||"").trim(),port:Number(f.get("port"))||465,security:f.get("sec")||"ssl",user:(f.get("suser")||"").trim(),pass:f.get("spass")||"",from:(f.get("sfrom")||"").trim()};
+function smtpMode(v){
+  const a=document.getElementById("boxPass"),b=document.getElementById("boxMs");
+  if(a)a.style.display=v==="microsoft"?"none":"";if(b)b.style.display=v==="microsoft"?"":"none";
+}
+// Copia para o ficheiro o refresh token mais recente (a Microsoft devolve um novo de cada vez que o serviço em segundo plano o usa).
+async function syncMsToken(){
+  try{
+    const m=meta.smtp&&meta.smtp.ms;
+    if(!m||!m.refresh||!window.Android||!Android.msCurrent)return;
+    const cur=Android.msCurrent(m.refresh);
+    if(cur&&cur!==m.refresh){m.refresh=cur;await saveMeta()}
+  }catch(e){}
+}
+function smtpFrom(f,ms){
+  return{mode:f.get("smode")==="microsoft"?"microsoft":"password",ms:ms&&ms.refresh?{clientId:(f.get("mscid")||ms.clientId||"").trim(),refresh:ms.refresh,user:ms.user||""}:{clientId:(f.get("mscid")||"").trim(),refresh:"",user:""},host:(f.get("host")||"").trim(),port:Number(f.get("port"))||465,security:f.get("sec")||"ssl",user:(f.get("suser")||"").trim(),pass:f.get("spass")||"",from:(f.get("sfrom")||"").trim()};
 }
 function delAlert(id){const v=cur();v.alerts=v.alerts.filter(a=>a.id!==id);if(v.alertPrefs)delete v.alertPrefs[id];document.querySelector(".sheet")?.remove();render()}
 function techFieldList(cat){
@@ -932,7 +991,7 @@ const normType=t=>(t||"").trim().toLowerCase();
 function planAlerts(v){
   if(!v.plan)v.plan=defPlan();
   return v.plan.map(p=>{
-    const rs=(v.records||[]).filter(r=>normType(r.type)===normType(p.type)).sort((a,b)=>b.date.localeCompare(a.date)||(b.km||0)-(a.km||0));
+    const rs=(v.records||[]).filter(r=>recHas(r,p.type)).sort((a,b)=>b.date.localeCompare(a.date)||(b.km||0)-(a.km||0));
     let ld=p.lastDate||"",lk=Number(p.lastKm)||0;const r=rs[0];
     if(r&&(!ld||r.date>=ld)){ld=r.date;lk=Number(r.km)||0}
     let date="";if(Number(p.months)&&ld){const d=new Date(ld+"T12:00");d.setMonth(d.getMonth()+Number(p.months));date=d.toISOString().slice(0,10)}
@@ -973,7 +1032,7 @@ function addMonthsISO(iso,n){
 // seja qual for o dia em que foi paga/feita. Registos de ciclos anteriores não mexem na data.
 function advanceFixedPlans(v,r){
   (v.plan||[]).forEach(p=>{
-    if(!p.fixed||!p.nextDue||!Number(p.months)||normType(p.type)!==normType(r.type))return;
+    if(!p.fixed||!p.nextDue||!Number(p.months)||!recHas(r,p.type))return;
     const m=Number(p.months);
     if(r.date<=addMonthsISO(p.nextDue,-m))return;
     let d=p.nextDue;do{d=addMonthsISO(d,m)}while(d<=r.date);
@@ -982,16 +1041,45 @@ function advanceFixedPlans(v,r){
 }
 const timeOnlyType=(v,t)=>unitOf(v)!=="none"&&(v.plan||[]).some(p=>normType(p.type)===normType(t)&&!Number(p.km)&&Number(p.months));
 function resetPlanPrefs(v,type){(v.plan||[]).filter(p=>normType(p.type)===normType(type)).forEach(p=>setPref(v,"plan:"+p.id,{snoozeUntil:null,date:null,km:null}))}
-function baseTypes(){
-  const removed=meta.typesRemoved||[],custom=meta.typesCustom||[];
+// Listas de sugestões POR ATIVO (guardadas no próprio ativo, por isso vão no ficheiro JSON).
+// Na primeira vez copiam as listas gerais antigas, para não perderes o que já tinhas.
+function LST(v){
+  v=v||cur();
+  if(!v.lists)v.lists={types:[...(meta.typesCustom||[])],typesRemoved:[...(meta.typesRemoved||[])],brands:[...(meta.brandsCustom||[])],brandsRemoved:[...(meta.brandsRemoved||[])]};
+  return v.lists;
+}
+function baseTypes(v){
+  const L=LST(v),removed=L.typesRemoved||[],custom=L.types||[];
   const out=TYPES.filter(t=>!removed.includes(t));
   custom.forEach(t=>{if(t&&!out.includes(t))out.push(t)});
   return out.sort((a,b)=>a.localeCompare(b,"pt"));
 }
-function allTypes(){
-  const extra=[];
-  S.vehicles.forEach(v=>{(v.plan||[]).forEach(p=>extra.push(p.type));(v.records||[]).forEach(r=>extra.push(r.type))});
-  const out=[...baseTypes()];extra.forEach(t=>{if(t&&!out.includes(t))out.push(t)});return out.sort((a,b)=>a.localeCompare(b,"pt"));
+// Tipos/ações sugeridos: só os deste ativo (lista base + plano + histórico de registos e ações).
+function allTypes(v){
+  v=v||cur();const extra=[];
+  if(v){(v.plan||[]).forEach(p=>extra.push(p.type));(v.records||[]).forEach(r=>{extra.push(r.type);(r.items||[]).forEach(i=>extra.push(i.name))})}
+  const out=[...baseTypes(v)];extra.forEach(t=>{t=(t||"").trim();if(t&&!out.includes(t))out.push(t)});return out.sort((a,b)=>a.localeCompare(b,"pt"));
+}
+function allShops(v){
+  v=v||cur();const set=new Set();
+  if(v)(v.records||[]).forEach(r=>{if((r.shop||"").trim())set.add(r.shop.trim())});
+  return [...set].sort((a,b)=>a.localeCompare(b,"pt"));
+}
+// Um registo "cobre" um tipo se for desse tipo ou se uma das suas ações tiver esse nome (ex.: Revisão com «Filtro de óleo»).
+const recHas=(r,t)=>{const n=normType(t);return normType(r.type)===n||(r.items||[]).some(i=>normType(i.name)===n)};
+// Lista plana de eventos (cada registo + cada ação dentro dele) para durações, previsões e rastreabilidade por peça.
+function recEvents(v){
+  const out=[];
+  (v.records||[]).forEach(r=>{
+    if(!r.date)return;
+    const same=(r.items||[]).find(i=>normType(i.name)===normType(r.type));
+    if(r.type)out.push({type:r.type,brand:(r.brand||(same&&same.brand)||"").trim(),date:r.date,km:r.km,oneOff:r.oneOff,recId:r.id});
+    (r.items||[]).forEach(i=>{
+      const n=(i.name||"").trim();if(!n||normType(n)===normType(r.type))return;
+      out.push({type:n,brand:(i.brand||"").trim(),date:r.date,km:r.km,oneOff:r.oneOff,recId:r.id,item:true});
+    });
+  });
+  return out;
 }
 // --- Relatórios (por ativo) ---
 // Estima o contador percorrido por ano a partir dos pontos conhecidos (registos + valor atual),
@@ -1040,7 +1128,7 @@ function yearDetail(vId,year){
   const recs=(v.records||[]).filter(r=>(r.date||"").startsWith(year)).sort((a,b)=>b.date.localeCompare(a.date));
   const total=recs.reduce((s,r)=>s+(Number(r.cost)||0),0);
   sheet(`<h2 style="font-size:19px">${esc(v.name)} — ${year}</h2><p class="mut" style="margin-top:-6px">${recs.length} registo${recs.length!==1?"s":""} · ${fmtEur(total)}</p>
-  ${recs.length?recs.map(r=>`<div class="card"><div class="row"><div><strong>${esc(r.type)}</strong><div class="mut">${fmtD(r.date)}${r.km?" · "+fmtCounterN(r.km,u):""}</div></div>${r.cost?`<span class="num" style="font-size:15px">${fmtEur(r.cost)}</span>`:""}</div>${r.brand?`<div class="mut" style="margin-top:3px">${esc(r.brand)}</div>`:""}</div>`).join(""):`<div class="empty">Sem registos neste ano.</div>`}
+  ${recs.length?recs.map(r=>`<div class="card"><div class="row"><div><strong>${esc(r.type)}</strong><div class="mut">${fmtD(r.date)}${r.km?" · "+fmtCounterN(r.km,u):""}</div></div>${r.cost?`<span class="num" style="font-size:15px">${fmtEur(r.cost)}</span>`:""}</div>${r.brand?`<div class="mut" style="margin-top:3px">${esc(r.brand)}</div>`:""}${r.shop?`<div class="mut" style="margin-top:3px">🔧 ${esc(r.shop)}</div>`:""}${(r.items||[]).length?`<div class="mut" style="margin-top:3px">${r.items.map(i=>esc(i.name)+(i.brand?" ("+esc(i.brand)+")":"")).join(" · ")}</div>`:""}</div>`).join(""):`<div class="empty">Sem registos neste ano.</div>`}
   <div class="acts"><button type="button" class="btn ghost" data-close>Fechar</button></div>`,()=>{});
 }
 const CMP_METRICS=[["km","Km / horas por ano"],["cost","Gastos"],["perkm","Custo por km/hora"],["tasks","Tarefas realizadas"],["avisos","Avisos pendentes"],["pecas","Duração entre substituições"]];
@@ -1147,7 +1235,7 @@ function partLifespans(v){
   // Um intervalo entre duas substituições seguidas mede quanto durou a PEÇA ANTERIOR (a),
   // não a que acabou de entrar (b) — essa ainda não tem substituição a seguir, logo não conta ainda.
   const rows=[],byType={};
-  (v.records||[]).forEach(r=>{if(r.type&&r.date)(byType[r.type]=byType[r.type]||[]).push(r)});
+  recEvents(v).forEach(r=>{if(r.type&&r.date)(byType[r.type]=byType[r.type]||[]).push(r)});
   Object.values(byType).forEach(list=>{
     const sorted=[...list].sort((a,b)=>a.date.localeCompare(b.date)||(a.km||0)-(b.km||0));
     for(let i=1;i<sorted.length;i++){
@@ -1224,58 +1312,59 @@ function relatorios(v){
   :`<div class="empty">Ainda não há duas ocorrências do mesmo tipo de registo para calcular durações.</div>`}
   `;
 }
-function baseBrands(){
-  const removed=meta.brandsRemoved||[],custom=meta.brandsCustom||[];
+function baseBrands(v){
+  const L=LST(v),removed=L.brandsRemoved||[],custom=L.brands||[];
   return custom.filter(t=>!removed.includes(t)).sort((a,b)=>a.localeCompare(b,"pt"));
 }
-function allBrands(){
-  const extra=[];
-  S.vehicles.forEach(v=>(v.records||[]).forEach(r=>{if(r.brand)extra.push(r.brand.trim())}));
-  const out=[...baseBrands()];extra.forEach(t=>{if(t&&!out.includes(t))out.push(t)});
+function allBrands(v){
+  v=v||cur();const extra=[];
+  if(v)(v.records||[]).forEach(r=>{if(r.brand)extra.push(r.brand.trim());(r.items||[]).forEach(i=>{if(i.brand)extra.push(i.brand.trim())})});
+  const out=[...baseBrands(v)];extra.forEach(t=>{if(t&&!out.includes(t))out.push(t)});
   return out.sort((a,b)=>a.localeCompare(b,"pt"));
 }
+let _mgSheet=null;
 function manageBrands(){
-  document.querySelectorAll(".sheet").forEach(s=>s.remove());
+  _mgSheet&&_mgSheet.remove();
   const list=baseBrands();
-  const d=sheet(`<h2>Gerir marcas/modelos</h2><p class="mut">Sugeridas ao preencher "Marca/modelo" num registo, em todos os ativos. Apagar uma marca aqui não apaga os registos já guardados com ela.</p>
+  const d=_mgSheet=sheet(`<h2>Gerir marcas/modelos</h2><p class="mut">Sugeridas ao preencher "Marca/modelo" neste ativo. Apagar uma marca aqui não apaga os registos já guardados com ela.</p>
   ${list.length?list.map((t,i)=>`<div class="card"><div class="row"><strong>${esc(t)}</strong><button type="button" class="btn del sm" onclick="removeBrand(${i})">Apagar</button></div></div>`).join(""):`<div class="empty">Sem marcas/modelos guardados ainda.</div>`}
   <label style="margin-top:14px">Adicionar marca/modelo</label><div class="g2"><input id="newbrand" placeholder="Ex.: Michelin CrossClimate 2"><button type="button" class="btn" id="addbrand">Adicionar</button></div>
   <div class="acts"><button type="button" class="btn ghost" data-close>Fechar</button></div>`,()=>{});
   d.querySelector("#addbrand").onclick=async()=>{
     const val=(d.querySelector("#newbrand").value||"").trim();if(!val)return;
-    meta.brandsRemoved=(meta.brandsRemoved||[]).filter(x=>x!==val);
-    meta.brandsCustom=[...new Set([...(meta.brandsCustom||[]),val])];
-    try{await tx("kv","readwrite",s=>s.put(meta,"meta"))}catch(e){}
+    LST().brandsRemoved=(LST().brandsRemoved||[]).filter(x=>x!==val);
+    LST().brands=[...new Set([...(LST().brands||[]),val])];
+    save();
     manageBrands();
   };
 }
 async function removeBrand(i){
   const list=baseBrands(),t=list[i];if(t===undefined)return;
-  meta.brandsRemoved=[...new Set([...(meta.brandsRemoved||[]),t])];
-  meta.brandsCustom=(meta.brandsCustom||[]).filter(x=>x!==t);
-  try{await tx("kv","readwrite",s=>s.put(meta,"meta"))}catch(e){}
+  LST().brandsRemoved=[...new Set([...(LST().brandsRemoved||[]),t])];
+  LST().brands=(LST().brands||[]).filter(x=>x!==t);
+  save();
   manageBrands();
 }
 function manageTypes(){
-  document.querySelectorAll(".sheet").forEach(s=>s.remove());
+  _mgSheet&&_mgSheet.remove();
   const list=baseTypes();
-  const d=sheet(`<h2>Gerir tipos de registo</h2><p class="mut">Esta lista é sugerida ao criar registos e intervenções do plano de manutenção, em todos os ativos. Apagar um tipo aqui não apaga registos já criados com esse tipo.</p>
+  const d=_mgSheet=sheet(`<h2>Gerir tipos de registo</h2><p class="mut">Esta lista é sugerida ao criar registos e intervenções do plano de manutenção, só neste ativo. Apagar um tipo aqui não apaga registos já criados com esse tipo.</p>
   ${list.length?list.map((t,i)=>`<div class="card"><div class="row"><strong>${esc(t)}</strong><button type="button" class="btn del sm" onclick="removeType(${i})">Apagar</button></div></div>`).join(""):`<div class="empty">Sem tipos definidos.</div>`}
   <label style="margin-top:14px">Adicionar tipo novo</label><div class="g2"><input id="newtype" placeholder="Ex.: Óleo do diferencial"><button type="button" class="btn" id="addtype">Adicionar</button></div>
   <div class="acts"><button type="button" class="btn ghost" data-close>Fechar</button></div>`,()=>{});
   d.querySelector("#addtype").onclick=async()=>{
     const val=(d.querySelector("#newtype").value||"").trim();if(!val)return;
-    meta.typesRemoved=(meta.typesRemoved||[]).filter(x=>x!==val);
-    meta.typesCustom=[...new Set([...(meta.typesCustom||[]),val])];
-    try{await tx("kv","readwrite",s=>s.put(meta,"meta"))}catch(e){}
+    LST().typesRemoved=(LST().typesRemoved||[]).filter(x=>x!==val);
+    LST().types=[...new Set([...(LST().types||[]),val])];
+    save();
     manageTypes();
   };
 }
 async function removeType(i){
   const list=baseTypes(),t=list[i];if(t===undefined)return;
-  meta.typesRemoved=[...new Set([...(meta.typesRemoved||[]),t])];
-  meta.typesCustom=(meta.typesCustom||[]).filter(x=>x!==t);
-  try{await tx("kv","readwrite",s=>s.put(meta,"meta"))}catch(e){}
+  LST().typesRemoved=[...new Set([...(LST().typesRemoved||[]),t])];
+  LST().types=(LST().types||[]).filter(x=>x!==t);
+  save();
   manageTypes();
 }
 function planSheet(){
@@ -1294,7 +1383,7 @@ function editPlan(id){
   sheet(`<h2>${id?"Editar intervenção":"Nova intervenção"}</h2>
   <div class="row" style="align-items:baseline"><label style="margin:0">Nome da intervenção</label><button type="button" class="btn ghost sm" style="padding:2px 10px;min-height:0" onclick="manageTypes()">Gerir lista</button></div>
   <input name="type" required list="typelist" placeholder="Ex.: Óleo do diferencial" value="${esc(p.type||"")}">
-  <datalist id="typelist">${allTypes().map(t=>`<option value="${esc(t)}">`).join("")}</datalist>
+  <datalist id="typelist">${allTypes(v).map(t=>`<option value="${esc(t)}">`).join("")}</datalist>
   ${hasCounter?`<label style="margin-top:14px">Controlar por</label>
   <div style="display:flex;gap:16px;flex-wrap:wrap;margin-top:4px">${modeRow("km",UNIT_NAME[u])}${modeRow("meses","Tempo")}${modeRow("ambos","Ambos")}</div>`:""}
   <div class="g2" style="margin-top:10px">

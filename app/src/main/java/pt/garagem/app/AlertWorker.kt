@@ -105,7 +105,7 @@ class AlertWorker(ctx: Context, params: WorkerParameters) : Worker(ctx, params) 
                         var found = false
                         for (k in 0 until records.length()) {
                             val r = records.getJSONObject(k)
-                            if (r.optString("type").trim().lowercase() == type.trim().lowercase()) {
+                            if (recMatches(r, type)) {
                                 val rd = r.optString("date", "")
                                 if (!found || rd >= bestDate) { bestDate = rd; bestKm = r.optDouble("km", 0.0); found = true }
                             }
@@ -203,6 +203,18 @@ class AlertWorker(ctx: Context, params: WorkerParameters) : Worker(ctx, params) 
         if (d != null) parts.add(if (d < 0) "há ${-d} dias" else if (d == 0L) "hoje" else "em $d dias")
         if (k != null) parts.add(if (k <= 0) "já passou" else "faltam ${k.toInt()} $unitSuf")
         due.add(Pair(key, "$vehicle — $title (${parts.joinToString(" · ")})"))
+    }
+
+    // Um registo cobre um tipo se for desse tipo ou se uma das suas ações tiver esse nome
+    private fun recMatches(r: JSONObject, type: String): Boolean {
+        val want = type.trim().lowercase()
+        if (r.optString("type").trim().lowercase() == want) return true
+        val items = r.optJSONArray("items") ?: return false
+        for (i in 0 until items.length()) {
+            val n = items.optJSONObject(i)?.optString("name", "") ?: ""
+            if (n.trim().lowercase() == want) return true
+        }
+        return false
     }
 
     private fun jsonInts(arr: JSONArray?, def: List<Int>): List<Int> {
@@ -314,7 +326,7 @@ class AlertWorker(ctx: Context, params: WorkerParameters) : Worker(ctx, params) 
         val subject = if (lines.size == 1) "RLTEC Ativos: 1 aviso de manutenção" else "RLTEC Ativos: ${lines.size} avisos de manutenção"
         val body = "Avisos de manutenção:\n\n" + lines.joinToString("\n") + "\n\nEnviado automaticamente pela app RLTEC Ativos."
         try {
-            Mailer.send(smtp, to, subject, body)
+            Mailer.send(ctx, smtp, to, subject, body)
             val ed2 = sent.edit()
             marks.forEach { ed2.putLong(it, System.currentTimeMillis()) }
             ed2.apply()
