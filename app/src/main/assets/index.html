@@ -141,11 +141,18 @@ function fileSync(now){
   fsT=setTimeout(()=>{
     try{
       const ok=Android.saveFile(JSON.stringify(fileData()));
-      if(ok){meta.lastBackup=Date.now();tx("kv","readwrite",s=>s.put(meta,"meta")).catch(()=>{});banner("Guardado no ficheiro às "+new Date().toLocaleTimeString("pt-PT",{hour:"2-digit",minute:"2-digit"}),true);setTimeout(()=>banner(""),2000)}
+      if(ok){meta.lastBackup=Date.now();tx("kv","readwrite",s=>s.put(meta,"meta")).catch(()=>{});banner("Guardado em "+fileLabel()+" às "+new Date().toLocaleTimeString("pt-PT",{hour:"2-digit",minute:"2-digit"}),true);setTimeout(()=>banner(""),3500)}
       else banner("Não foi possível escrever no ficheiro. Escolhe-o outra vez em Cópia.");
     }catch(e){banner("Erro ao escrever no ficheiro.")}
   },now?0:600);
 }
+function fileInfo(){
+  try{
+    if(Android.fileInfo){const i=JSON.parse(Android.fileInfo()||"{}");if(i.name||i.where)return i}
+  }catch(e){}
+  return{name:(window.Android&&Android.fileName&&Android.fileName())||""};
+}
+const fileLabel=()=>{const i=fileInfo();return "«"+(i.name||"ficheiro")+"»"+(i.where?" ("+i.where+")":"")};
 const saveMetaQuiet=()=>tx("kv","readwrite",x=>x.put(meta,"meta")).catch(()=>{});
 // Depois de escolher o ficheiro NÃO se mexe nos dados: só fica ligado. O utilizador decide em seguida: Gravar ou Recuperar.
 window.onAndroidFile=async mode=>{
@@ -155,7 +162,7 @@ window.onAndroidFile=async mode=>{
 };
 // ficheiro → app
 async function recoverFromFile(d){
-  if(!confirm("Tem a certeza que quer recuperar os dados do ficheiro?"))return;
+  if(!confirm("Tem a certeza que quer recuperar os dados do ficheiro "+fileLabel()+"?"))return;
   let j=null;
   try{j=JSON.parse(Android.readFile())}catch(e){}
   if(!j||j.app!=="garagem"||!Array.isArray(j.vehicles)){alert("O ficheiro está vazio ou não é do RLTEC Ativos.");return}
@@ -164,7 +171,7 @@ async function recoverFromFile(d){
 }
 // app → ficheiro
 async function saveToFile(d){
-  if(!confirm("Tem a certeza que quer gravar os dados no ficheiro?"))return;
+  if(!confirm("Tem a certeza que quer gravar os dados no ficheiro "+fileLabel()+"?"))return;
   meta.fileArmed=true;await saveMetaQuiet();
   fileSync(true);d.remove();render();
 }
@@ -1480,7 +1487,7 @@ function backup(){
   const A=!!window.Android,hasFile=A&&Android.hasFile(),pending=hasFile&&meta.fileArmed===false;
   const d=sheet(`<h2>Cópia de segurança</h2>
   ${A?`
-  <p><strong>Ficheiro de dados:</strong> ${hasFile?esc(Android.fileName()||"(sem nome)"):"nenhum escolhido"}</p>
+  ${hasFile?(()=>{const i=fileInfo(),mod=i.modified?new Date(i.modified).toLocaleDateString("pt-PT")+" "+new Date(i.modified).toLocaleTimeString("pt-PT",{hour:"2-digit",minute:"2-digit"}):"",kb=i.size!=null?(i.size/1024).toFixed(i.size<10240?1:0)+" KB":"";return `<div class="card" style="padding:10px;margin-bottom:10px"><div class="mut" style="font-size:12px">Ficheiro onde a app grava e recupera</div><div style="font-weight:600;word-break:break-all;margin:2px 0">📄 ${esc(i.name||"(sem nome)")}</div>${i.where?`<div class="mut">📁 ${esc(i.where)}</div>`:""}${mod||kb?`<div class="mut">Modificado: ${mod}${mod&&kb?" · ":""}${kb}</div>`:""}</div>`})():`<p><strong>Ficheiro de dados:</strong> nenhum escolhido</p>`}
   ${hasFile?`
   ${pending?`<p class="mut">Ficheiro ligado. A gravação automática só começa depois de usares um dos botões.</p>`:`<p class="mut">A app grava neste ficheiro sempre que alteras alguma coisa. Última gravação: <strong>${last}</strong></p>`}
   <div class="acts"><button type="button" class="btn" id="asv">⬆ Gravar no ficheiro</button><button type="button" class="btn" id="arc">⬇ Recuperar do ficheiro</button></div>
@@ -1499,6 +1506,11 @@ function backup(){
     d.querySelector("#arc")?.addEventListener("click",()=>recoverFromFile(d));
   }
   d.querySelector("#ex").onclick=async()=>{
+    if(window.Android&&Android.shareJson){
+      Android.shareJson(JSON.stringify(fileData()),"rltec-ativos-"+today()+".json");
+      meta.lastBackup=Date.now();try{await tx("kv","readwrite",s=>s.put(meta,"meta"))}catch(e){}
+      return;
+    }
     const name="rltec-ativos-"+today()+".json",blob=new Blob([JSON.stringify(fileData())],{type:"application/json"}),f=new File([blob],name,{type:"application/json"});
     try{
       if(navigator.canShare&&navigator.canShare({files:[f]}))await navigator.share({files:[f],title:"RLTEC Ativos"});else throw 0;

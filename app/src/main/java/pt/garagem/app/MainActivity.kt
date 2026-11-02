@@ -13,6 +13,7 @@ import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.provider.MediaStore
+import android.provider.DocumentsContract
 import android.provider.OpenableColumns
 import androidx.core.content.FileProvider
 import com.google.mlkit.vision.common.InputImage
@@ -56,6 +57,45 @@ class MainActivity : Activity() {
                     if (c.moveToFirst()) c.getString(c.getColumnIndexOrThrow(OpenableColumns.DISPLAY_NAME)) ?: "" else ""
                 } ?: ""
             } catch (e: Exception) { "" }
+        }
+
+        // Nome, local, tamanho e data de modificação do ficheiro ligado (para o utilizador saber onde a app grava)
+        @JavascriptInterface
+        fun fileInfo(): String {
+            val u = fileUri() ?: return "{}"
+            val o = JSONObject()
+            try {
+                contentResolver.query(u, null, null, null, null)?.use { c ->
+                    if (c.moveToFirst()) {
+                        val ni = c.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+                        if (ni >= 0) o.put("name", c.getString(ni) ?: "")
+                        val si = c.getColumnIndex(OpenableColumns.SIZE)
+                        if (si >= 0 && !c.isNull(si)) o.put("size", c.getLong(si))
+                        val mi = c.getColumnIndex(DocumentsContract.Document.COLUMN_LAST_MODIFIED)
+                        if (mi >= 0 && !c.isNull(mi)) o.put("modified", c.getLong(mi))
+                    }
+                }
+            } catch (e: Exception) { }
+            o.put("where", describeLocation(u))
+            return o.toString()
+        }
+
+        private fun describeLocation(u: Uri): String {
+            val auth = u.authority ?: ""
+            val docId = try { DocumentsContract.getDocumentId(u) } catch (e: Exception) { "" }
+            return when {
+                auth == "com.android.externalstorage.documents" -> {
+                    val parts = docId.split(":", limit = 2)
+                    val vol = if (parts[0] == "primary") "Armazenamento interno" else "Cartão SD"
+                    val path = (parts.getOrNull(1) ?: "").substringBeforeLast('/', "")
+                    if (path.isEmpty()) vol else vol + " › " + path.replace("/", " › ")
+                }
+                auth.contains("downloads") -> "Transferências"
+                auth.contains("google.android.apps.docs") -> "Google Drive"
+                auth.contains("onedrive") || auth.contains("skydrive") -> "OneDrive"
+                auth.contains("dropbox") -> "Dropbox"
+                else -> auth
+            }
         }
 
         @JavascriptInterface
@@ -157,6 +197,31 @@ class MainActivity : Activity() {
                     web.evaluateJavascript("window.onEmailTest&&window.onEmailTest(${JSONObject.quote(res.toString())})", null)
                 }
             }.start()
+        }
+
+        // Partilha uma cópia dos dados (JSON) pelo menu "Partilhar" do Android (email, Drive, WhatsApp…)
+        @JavascriptInterface
+        fun shareJson(json: String, filename: String) {
+            runOnUiThread {
+                try {
+                    val dir = File(cacheDir, "attach").apply { mkdirs() }
+                    val safeName = (if (filename.isBlank()) "rltec-ativos.json" else filename).replace(Regex("[^A-Za-z0-9._-]"), "_")
+                    val file = File(dir, safeName)
+                    file.writeText(json, Charsets.UTF_8)
+                    val uri = FileProvider.getUriForFile(this@MainActivity, "$packageName.fileprovider", file)
+                    val send = Intent(Intent.ACTION_SEND).apply {
+                        type = "application/json"
+                        putExtra(Intent.EXTRA_STREAM, uri)
+                        putExtra(Intent.EXTRA_SUBJECT, "RLTEC Ativos — cópia de segurança")
+                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                    }
+                    startActivity(Intent.createChooser(send, "Partilhar cópia"))
+                } catch (e: Exception) {
+                    AlertDialog.Builder(this@MainActivity)
+                        .setMessage("Não foi possível partilhar a cópia: " + (e.message ?: e.toString()))
+                        .setPositiveButton("OK", null).show()
+                }
+            }
         }
 
         @JavascriptInterface
