@@ -136,6 +136,7 @@ async function applyData(j){Object.keys(PH).forEach(k=>delete PH[k]);Object.assi
 let fsT=null;
 function fileSync(now){
   if(!window.Android||!Android.hasFile())return;
+  if(meta.fileArmed===false)return;   // ficheiro acabado de ligar: só grava depois de o utilizador escolher "Gravar" ou "Recuperar"
   clearTimeout(fsT);
   fsT=setTimeout(()=>{
     try{
@@ -145,26 +146,28 @@ function fileSync(now){
     }catch(e){banner("Erro ao escrever no ficheiro.")}
   },now?0:600);
 }
-async function loadFromFile(say,d){
-  try{
-    const j=JSON.parse(Android.readFile());
-    if(j.app!=="garagem"||!Array.isArray(j.vehicles))throw 0;
-    if(!confirm("Substituir os dados da app pelos do ficheiro?"))return;
-    await applyData(j);d.remove();render();
-  }catch(e){say("Ficheiro vazio ou inválido.")}
-}
+const saveMetaQuiet=()=>tx("kv","readwrite",x=>x.put(meta,"meta")).catch(()=>{});
+// Depois de escolher o ficheiro NÃO se mexe nos dados: só fica ligado. O utilizador decide em seguida: Gravar ou Recuperar.
 window.onAndroidFile=async mode=>{
   document.querySelectorAll(".sheet").forEach(s=>s.remove());
-  if(mode==="create"){fileSync(true);render();return}
-  try{
-    const txt=Android.readFile();let j=null;try{j=JSON.parse(txt)}catch(e){}
-    if(j&&j.app==="garagem"&&Array.isArray(j.vehicles)){
-      if(confirm("O ficheiro tem "+j.vehicles.length+" ativo(s). Carregar os dados do ficheiro para a app?\n\nOK = carregar.\nCancelar = manter os dados atuais e substituir o conteúdo do ficheiro.")){await applyData(j);render();return}
-      if(!confirm("Substituir o conteúdo do ficheiro pelos dados atuais da app?")){Android.clearFile();render();return}
-    }else if(txt.trim()&&!confirm("Este ficheiro não é do RLTEC Ativos. Substituir o conteúdo?")){Android.clearFile();render();return}
-    fileSync(true);render();
-  }catch(e){banner("Não foi possível ler o ficheiro.")}
+  if(mode==="create"){meta.fileArmed=true;await saveMetaQuiet();fileSync(true);render();backup();return}
+  meta.fileArmed=false;await saveMetaQuiet();render();backup();
 };
+// ficheiro → app
+async function recoverFromFile(d){
+  if(!confirm("Tem a certeza que quer recuperar os dados do ficheiro?"))return;
+  let j=null;
+  try{j=JSON.parse(Android.readFile())}catch(e){}
+  if(!j||j.app!=="garagem"||!Array.isArray(j.vehicles)){alert("O ficheiro está vazio ou não é do RLTEC Ativos.");return}
+  await applyData(j);meta.fileArmed=true;await saveMetaQuiet();
+  d.remove();render();banner("Dados recuperados do ficheiro",true);setTimeout(()=>banner(""),2500);
+}
+// app → ficheiro
+async function saveToFile(d){
+  if(!confirm("Tem a certeza que quer gravar os dados no ficheiro?"))return;
+  meta.fileArmed=true;await saveMetaQuiet();
+  fileSync(true);d.remove();render();
+}
 
 async function autoBackup(){
   if(window.Android||!S.vehicles.length)return;
@@ -1474,27 +1477,26 @@ window.appBack=function(){
 function zoom(s){const l=$("#lb");l.querySelector("img").src=s;l.style.display="grid"}
 function backup(){
   const last=meta.lastBackup?new Date(meta.lastBackup).toLocaleDateString("pt-PT")+" "+new Date(meta.lastBackup).toLocaleTimeString("pt-PT",{hour:"2-digit",minute:"2-digit"}):"nunca";
-  const hasFile=window.Android&&Android.hasFile();
+  const A=!!window.Android,hasFile=A&&Android.hasFile(),pending=hasFile&&meta.fileArmed===false;
   const d=sheet(`<h2>Cópia de segurança</h2>
-  ${window.Android?`
-  <p class="mut">A app grava sempre no ficheiro que escolheres aqui — sem criar ficheiros novos a cada vez. Escolhe-o uma vez; se mudares de telemóvel, copia esse ficheiro para o novo e escolhe-o aqui de novo.</p>
-  <p><strong>Ficheiro:</strong> ${hasFile?esc(Android.fileName()||"(sem nome)"):"nenhum escolhido"}</p>
-  <div class="acts"><button type="button" class="btn" id="afn">Criar ficheiro novo</button><button type="button" class="btn ghost" id="afo">Escolher existente</button></div>
-  ${hasFile?`<div class="acts"><button type="button" class="btn ghost" id="afs">Guardar agora</button><button type="button" class="btn ghost" id="afl">Carregar do ficheiro</button></div>`:""}
-  <div id="amsg" class="mut" style="margin-bottom:8px"></div>
-  <p class="mut">Última gravação: <strong>${last}</strong></p>
-  <h3 style="margin:14px 0 4px">Cópia manual</h3>
-  <p class="mut">Além do ficheiro acima, podes exportar uma cópia à parte a qualquer momento (para o Drive, email, computador…).</p>`
+  ${A?`
+  <p><strong>Ficheiro de dados:</strong> ${hasFile?esc(Android.fileName()||"(sem nome)"):"nenhum escolhido"}</p>
+  ${hasFile?`
+  ${pending?`<p class="mut">Ficheiro ligado. A gravação automática só começa depois de usares um dos botões.</p>`:`<p class="mut">A app grava neste ficheiro sempre que alteras alguma coisa. Última gravação: <strong>${last}</strong></p>`}
+  <div class="acts"><button type="button" class="btn" id="asv">⬆ Gravar no ficheiro</button><button type="button" class="btn" id="arc">⬇ Recuperar do ficheiro</button></div>
+  <div class="acts"><button type="button" class="btn ghost sm" id="afn">Mudar: criar ficheiro novo</button><button type="button" class="btn ghost sm" id="afo">Mudar: escolher outro</button></div>`
+  :`<p class="mut">Escolhe um ficheiro uma só vez. Depois podes gravar nele os dados da app ou recuperar os dados que lá estão.</p>
+  <div class="acts"><button type="button" class="btn" id="afn">Criar ficheiro novo</button><button type="button" class="btn ghost" id="afo">Escolher existente</button></div>`}
+  <div id="amsg" class="mut" style="margin-bottom:8px"></div>`
   :`<p class="mut">Os dados ficam guardados neste dispositivo. Exporta uma cópia de vez em quando.</p><p class="mut">Última cópia: <strong>${last}</strong></p>`}
-  <div class="acts"><button type="button" class="btn${window.Android?" ghost":""}" id="ex">Guardar / partilhar cópia</button></div>
-  <label>Importar cópia (substitui os dados atuais)</label><input type="file" id="im" accept=".json,application/json">
+  <div class="acts"><button type="button" class="btn ghost" id="ex">${A?"Partilhar uma cópia (email, Drive…)":"Guardar / partilhar cópia"}</button></div>
+  ${A?"":`<label>Importar cópia (substitui os dados atuais)</label><input type="file" id="im" accept=".json,application/json">`}
   <div class="acts"><button type="button" class="btn ghost" data-close>Fechar</button></div>`,()=>{});
-  if(window.Android){
-    const say=x=>{const el=d.querySelector("#amsg");if(el)el.textContent=x};
+  if(A){
     d.querySelector("#afn").onclick=()=>Android.createFile();
     d.querySelector("#afo").onclick=()=>Android.pickFile();
-    d.querySelector("#afs")?.addEventListener("click",()=>{fileSync(true);say("A gravar…")});
-    d.querySelector("#afl")?.addEventListener("click",()=>loadFromFile(say,d));
+    d.querySelector("#asv")?.addEventListener("click",()=>saveToFile(d));
+    d.querySelector("#arc")?.addEventListener("click",()=>recoverFromFile(d));
   }
   d.querySelector("#ex").onclick=async()=>{
     const name="rltec-ativos-"+today()+".json",blob=new Blob([JSON.stringify(fileData())],{type:"application/json"}),f=new File([blob],name,{type:"application/json"});
@@ -1507,7 +1509,7 @@ function backup(){
     meta.lastBackup=Date.now();try{await tx("kv","readwrite",s=>s.put(meta,"meta"))}catch(e){}
     d.remove();render();
   };
-  d.querySelector("#im").onchange=async e=>{
+  if(d.querySelector("#im"))d.querySelector("#im").onchange=async e=>{
     try{
       const j=JSON.parse(await e.target.files[0].text());if(j.app!=="garagem"||!Array.isArray(j.vehicles))throw 0;
       if(!confirm("Substituir todos os dados deste telemóvel pelos do ficheiro?"))return;
