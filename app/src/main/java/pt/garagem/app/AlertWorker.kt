@@ -144,7 +144,10 @@ class AlertWorker(ctx: Context, params: WorkerParameters) : Worker(ctx, params) 
         }
 
         if (cfg.on && nowHour >= cfg.hour) runNotifications(due, cfg)
-        try { processEmails(emailCfg, smtpCfg, nowHour, today, todayStr) } catch (e: Exception) { }
+        // A versão slave não envia emails (a principal já os envia; evita duplicados)
+        if (!BuildConfig.SLAVE) {
+            try { processEmails(emailCfg, smtpCfg, nowHour, today, todayStr) } catch (e: Exception) { }
+        }
         return Result.success()
     }
 

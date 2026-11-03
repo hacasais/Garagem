@@ -12,6 +12,26 @@ android {
         versionCode = 1
         versionName = "1.0"
     }
+    buildFeatures { buildConfig = true }
+    flavorDimensions += "role"
+    productFlavors {
+        // Versão principal (a que já tens): lê e grava o ficheiro de dados.
+        create("master") {
+            dimension = "role"
+            buildConfigField("boolean", "SLAVE", "false")
+            resValue("string", "app_name", "RLTEC Ativos")
+        }
+        // Versão slave: tem TODAS as funcionalidades da principal e, além disso, importa regularmente
+        // os dados do ficheiro JSON (também com a app fechada, como os avisos).
+        // Tem outro identificador, por isso pode estar instalada ao lado da principal.
+        create("slave") {
+            dimension = "role"
+            applicationIdSuffix = ".slave"
+            versionNameSuffix = "-slave"
+            buildConfigField("boolean", "SLAVE", "true")
+            resValue("string", "app_name", "RLTEC Ativos Slave")
+        }
+    }
     signingConfigs {
         create("garagem") {
             storeFile = file("garagem.keystore.jks")

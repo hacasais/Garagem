@@ -10,7 +10,10 @@ Como obter o APK (conta GitHub gratuita, feito num computador)
 2. Descompacta este zip. No repositório, escolhe "Add file > Upload files" e arrasta TODO o conteúdo da pasta (inclui a pasta .github; se não a conseguires ver, ativa a vista de ficheiros ocultos).
    Se a pasta .github não subir: "Add file > Create new file", escreve o nome  .github/workflows/build.yml  e cola o conteúdo do ficheiro build.yml que está no zip.
 3. Separador "Actions": abre "Build APK" e, se não arrancar sozinho, "Run workflow". Demora uns 5 a 10 minutos.
-4. Quando ficar verde, abre a execução e descarrega o artefacto "rltec-ativos-apk" (vem em zip). Dentro está app-debug.apk.
+4. Quando ficar verde, abre a execução e descarrega o artefacto "rltec-ativos-apk" (vem em zip). Dentro estão dois APK:
+   - app-master-debug.apk  -> versão principal (lê e grava o ficheiro de dados).
+   - app-slave-debug.apk   -> versão slave ("RLTEC Ativos Slave"): tem todas as funcionalidades e importa regularmente o ficheiro de dados, também com a app fechada.
+   A versão slave tem outro identificador, por isso pode estar instalada ao lado da principal.
 5. Copia o APK para o telemóvel, abre-o e permite instalar de "origens desconhecidas".
    Se o passo 3 falhar (vermelho), copia-me a mensagem de erro e eu corrijo.
 

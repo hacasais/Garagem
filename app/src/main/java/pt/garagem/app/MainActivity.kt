@@ -32,6 +32,7 @@ import android.webkit.WebResourceResponse
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.webkit.WebViewAssetLoader
+import androidx.work.Constraints
 import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
@@ -48,6 +49,19 @@ class MainActivity : Activity() {
     inner class Bridge {
         @JavascriptInterface
         fun hasFile(): Boolean = fileUri() != null
+
+        @JavascriptInterface
+        fun isSlave(): Boolean = BuildConfig.SLAVE
+
+        // Intervalo da importação em segundo plano (minutos; 0 = desligada)
+        @JavascriptInterface
+        fun importIntervalMin(): Int = prefs.getInt("import_min", 180)
+
+        @JavascriptInterface
+        fun setImportInterval(minutes: Int) {
+            prefs.edit().putInt("import_min", minutes).apply()
+            scheduleImport(this@MainActivity, minutes, ExistingPeriodicWorkPolicy.UPDATE)
+        }
 
         @JavascriptInterface
         fun fileName(): String {
@@ -333,6 +347,24 @@ class MainActivity : Activity() {
             .sortedDescending()
     }
 
+    companion object {
+        // true enquanto a app está visível (a importação em segundo plano não corre nessa altura)
+        @Volatile var visible = false
+
+        /** Agenda (ou cancela, se minutos <= 0) a importação em segundo plano da versão slave. Mínimo do Android: 15 min. */
+        fun scheduleImport(ctx: android.content.Context, minutes: Int, policy: ExistingPeriodicWorkPolicy) {
+            val wm = WorkManager.getInstance(ctx)
+            if (!BuildConfig.SLAVE || minutes <= 0) { wm.cancelUniqueWork("garagem_import_check"); return }
+            val req = PeriodicWorkRequestBuilder<ImportWorker>(maxOf(15, minutes).toLong(), TimeUnit.MINUTES)
+                .setConstraints(Constraints.Builder().setRequiresBatteryNotLow(true).build())   // poupa bateria
+                .build()
+            wm.enqueueUniquePeriodicWork("garagem_import_check", policy, req)
+        }
+    }
+
+    override fun onResume() { super.onResume(); visible = true }
+    override fun onPause() { visible = false; super.onPause() }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         web = WebView(this)
@@ -396,6 +428,8 @@ class MainActivity : Activity() {
         val work = PeriodicWorkRequestBuilder<AlertWorker>(6, TimeUnit.HOURS).build()
         WorkManager.getInstance(this)
             .enqueueUniquePeriodicWork("garagem_alert_check", ExistingPeriodicWorkPolicy.KEEP, work)
+        // Versão slave: importa o ficheiro JSON com a app fechada, no intervalo escolhido pelo utilizador (por defeito 3 h)
+        if (BuildConfig.SLAVE) scheduleImport(this, prefs.getInt("import_min", 180), ExistingPeriodicWorkPolicy.KEEP)
     }
 
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
@@ -416,7 +450,9 @@ class MainActivity : Activity() {
                 if (resultCode == RESULT_OK && u != null) {
                     try {
                         contentResolver.takePersistableUriPermission(u, Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
-                    } catch (e: Exception) { }
+                    } catch (e: Exception) {
+                        try { contentResolver.takePersistableUriPermission(u, Intent.FLAG_GRANT_READ_URI_PERMISSION) } catch (e2: Exception) { }
+                    }
                     prefs.edit().putString("uri", u.toString()).apply()
                     val mode = if (requestCode == 1) "create" else "open"
                     web.evaluateJavascript("window.onAndroidFile&&window.onAndroidFile('$mode')", null)

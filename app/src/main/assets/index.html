@@ -82,6 +82,8 @@ main{width:100%;min-width:0;overflow-x:clip}
 <div id="bn" role="alert"></div><main id="app"></main>
 <div id="lb" onclick="this.style.display='none'"><img alt="Fotografia ampliada"></div>
 <script>
+const SLAVE=!!(window.Android&&Android.isSlave&&Android.isSlave());
+const HEADLESS=SLAVE&&/[?&]headless=1/.test(location.search);   // aberta pelo serviço em segundo plano (sem ecrã)
 const ACTIONS=["Óleo motor","Filtro de óleo","Filtro de ar","Filtro do habitáculo","Filtro de combustível","Velas de ignição","Pastilhas de travão","Discos de travão","Líquido de travões","Líquido de refrigeração","Correia de acessórios","Kit de distribuição","Bateria","Escovas limpa-vidros","Lâmpadas","Pneus","Amortecedores","Embraiagem","Óleo da caixa","Óleo do diferencial","Alinhamento / geometria","Mão-de-obra"];
 const TYPES=["Revisão","Óleo e filtros","Pneus","Rotação de pneus","Travões","Bateria","Inspeção (IPO)","Seguro","Reparação","Alteração / extra","Lavagem / estética","Combustível","Outro"];
 const ASSETS=true,PH={},removed=new Set();
@@ -135,16 +137,45 @@ async function applyData(j){Object.keys(PH).forEach(k=>delete PH[k]);Object.assi
 // --- Ficheiro de dados no Android: a app grava sempre no mesmo ficheiro que o utilizador escolheu ---
 let fsT=null;
 function fileSync(now){
+  if(HEADLESS)return;   // importação em segundo plano: só lê o ficheiro
   if(!window.Android||!Android.hasFile())return;
   if(meta.fileArmed===false)return;   // ficheiro acabado de ligar: só grava depois de o utilizador escolher "Gravar" ou "Recuperar"
   clearTimeout(fsT);
   fsT=setTimeout(()=>{
     try{
-      const ok=Android.saveFile(JSON.stringify(fileData()));
-      if(ok){meta.lastBackup=Date.now();tx("kv","readwrite",s=>s.put(meta,"meta")).catch(()=>{});banner("Guardado em "+fileLabel()+" às "+new Date().toLocaleTimeString("pt-PT",{hour:"2-digit",minute:"2-digit"}),true);setTimeout(()=>banner(""),3500)}
+      const txt=JSON.stringify(fileData()),ok=Android.saveFile(txt);
+      if(ok){if(SLAVE){meta.slaveHash=hash32(txt);meta.slaveLocal=hash32(cj(S.vehicles))}meta.lastBackup=Date.now();tx("kv","readwrite",s=>s.put(meta,"meta")).catch(()=>{});banner("Guardado em "+fileLabel()+" às "+new Date().toLocaleTimeString("pt-PT",{hour:"2-digit",minute:"2-digit"}),true);setTimeout(()=>banner(""),3500)}
       else banner("Não foi possível escrever no ficheiro. Escolhe-o outra vez em Cópia.");
     }catch(e){banner("Erro ao escrever no ficheiro.")}
   },now?0:600);
+}
+// ===== Versão slave: importa os dados do ficheiro JSON regularmente (também com a app fechada, via serviço em segundo plano) =====
+const hash32=t=>{let h=5381;for(let i=0;i<t.length;i++)h=((h<<5)+h+t.charCodeAt(i))|0;return t.length+"-"+(h>>>0)};
+async function slaveSync(manual){
+  if(!SLAVE||!window.Android||!Android.hasFile())return false;
+  try{
+    const i=fileInfo(),sig=(i.modified||0)+"|"+(i.size||0);
+    if(!manual&&i.modified&&meta.slaveSig===sig)return true;      // ficheiro igual ao da última leitura
+    const txt=Android.readFile();
+    if(!txt){if(!HEADLESS)banner("Não foi possível ler o ficheiro.",false);return false}
+    let j=null;try{j=JSON.parse(txt)}catch(e){}
+    if(!j||j.app!=="garagem"||!Array.isArray(j.vehicles)){if(!HEADLESS)banner("O ficheiro não é do RLTEC Ativos.",false);return false}
+    const h=hash32(txt);
+    if(meta.slaveHash===h){meta.slaveSig=sig;meta.slaveLast=Date.now();await saveMetaQuiet();return true}   // mesmo conteúdo
+    // Há alterações feitas aqui que ainda não foram gravadas no ficheiro: não as apagar.
+    if(!manual&&meta.slaveLocal&&hash32(cj(S.vehicles))!==meta.slaveLocal)return "dirty";
+    const keep=S.sel,tab=S.tab;
+    await applyData(j);
+    if(keep&&S.vehicles.some(v=>v.id===keep)){S.sel=keep;S.tab=tab}
+    meta.slaveSig=sig;meta.slaveHash=h;meta.slaveLast=Date.now();meta.slaveLocal=hash32(cj(S.vehicles));
+    await saveMetaQuiet();
+    if(!HEADLESS){render();banner("Dados importados do ficheiro",true);setTimeout(()=>banner(""),2500)}
+    return true;
+  }catch(e){if(!HEADLESS)banner("Erro ao importar: "+(e.message||e),false);return false}
+}
+function slaveWatch(){
+  document.addEventListener("visibilitychange",()=>{if(!document.hidden)slaveSync(false)});
+  setInterval(()=>{if(!document.hidden)slaveSync(false)},15*60*1000);
 }
 function fileInfo(){
   try{
@@ -156,6 +187,12 @@ const fileLabel=()=>{const i=fileInfo();return "«"+(i.name||"ficheiro")+"»"+(i
 const saveMetaQuiet=()=>tx("kv","readwrite",x=>x.put(meta,"meta")).catch(()=>{});
 // Depois de escolher o ficheiro NÃO se mexe nos dados: só fica ligado. O utilizador decide em seguida: Gravar ou Recuperar.
 window.onAndroidFile=async mode=>{
+  if(SLAVE&&mode==="open"){   // versão slave: ao escolher o ficheiro, importa logo os dados dele
+    document.querySelectorAll(".sheet").forEach(s=>s.remove());
+    meta.slaveSig="";meta.slaveHash="";meta.slaveLocal="";
+    if(await slaveSync(true)){meta.fileArmed=true;await saveMetaQuiet()}
+    render();backup();return;
+  }
   document.querySelectorAll(".sheet").forEach(s=>s.remove());
   if(mode==="create"){meta.fileArmed=true;await saveMetaQuiet();fileSync(true);render();backup();return}
   meta.fileArmed=false;await saveMetaQuiet();render();backup();
@@ -200,7 +237,12 @@ async function init(){
     await new Promise(res=>{const c=d.transaction("photos").objectStore("photos").openCursor();c.onsuccess=()=>{const u=c.result;if(u){PH[u.key]=u.value;u.continue()}else res()};c.onerror=()=>res()});
     try{navigator.storage&&navigator.storage.persist&&navigator.storage.persist()}catch(e){}
     await restorePhotosFromFile();
-    syncMsToken();
+    if(SLAVE){
+      let r=false;
+      if(window.Android&&Android.hasFile())r=await slaveSync(false);
+      else if(!HEADLESS)banner("Escolhe o ficheiro de dados (botão Cópia) para a importação automática.",false);
+      if(HEADLESS){try{Android.headlessDone(r===true)}catch(e){}}
+    }else syncMsToken();
     LOAD="ok";render();
   }catch(e){LOAD="off";render()}
 }
@@ -269,7 +311,7 @@ function heroTouchEnd(e){
 function listView(){
   const nActAll=S.vehicles.reduce((t,v)=>t+allAlerts(v).filter(a=>isActive(a,v)).length,0);
   const n=S.vehicles.reduce((s,v)=>s+allAlerts(v).filter(a=>near(a,v)).length,0);
-  return `<div class="top"><h1><span class="brand">RT</span>RLTEC Ativos</h1><div style="display:flex;gap:6px">${S.vehicles.length>1?`<button class="btn ghost sm" onclick="compareAssets()">Comparar</button>`:""}<button class="btn ghost sm" onclick="alarmCenter()">🔔${nActAll?" "+nActAll:""}</button><button class="btn ghost sm" onclick="backup()">Cópia</button></div></div>
+  return `<div class="top"><h1><span class="brand">RT</span>RLTEC Ativos${SLAVE?" · Slave":""}</h1><div style="display:flex;gap:6px">${S.vehicles.length>1?`<button class="btn ghost sm" onclick="compareAssets()">Comparar</button>`:""}<button class="btn ghost sm" onclick="alarmCenter()">🔔${nActAll?" "+nActAll:""}</button><button class="btn ghost sm" onclick="backup()">Cópia</button></div></div>
   ${bkNote()}
   ${n?`<p class="mut" style="margin:0 0 12px">${n} aviso${n>1?"s":""} nos próximos 2 meses (ou a menos de 2 000 km)</p>`:""}
   ${S.vehicles.length?S.vehicles.map(vcard).join(""):`<div class="empty">Ainda não tens nenhum ativo.<br>Adiciona o primeiro para começar a registar.</div>`}
@@ -1486,6 +1528,9 @@ function backup(){
   const last=meta.lastBackup?new Date(meta.lastBackup).toLocaleDateString("pt-PT")+" "+new Date(meta.lastBackup).toLocaleTimeString("pt-PT",{hour:"2-digit",minute:"2-digit"}):"nunca";
   const A=!!window.Android,hasFile=A&&Android.hasFile(),pending=hasFile&&meta.fileArmed===false;
   const d=sheet(`<h2>Cópia de segurança</h2>
+  ${SLAVE?`<p class="mut">Versão slave: importa o ficheiro automaticamente, mesmo com a app fechada (de 3 em 3 horas), e sempre que abres a app.<br>Última importação: <strong>${meta.slaveLast?new Date(meta.slaveLast).toLocaleDateString("pt-PT")+" "+new Date(meta.slaveLast).toLocaleTimeString("pt-PT",{hour:"2-digit",minute:"2-digit"}):"nunca"}</strong></p>
+  <label>Importar com a app fechada</label><select id="imint">${(()=>{let cur=180;try{cur=Android.importIntervalMin()}catch(e){}return [[0,"Desligado"],[15,"A cada 15 minutos"],[30,"A cada 30 minutos"],[60,"A cada hora"],[120,"A cada 2 horas"],[180,"A cada 3 horas"],[360,"A cada 6 horas"],[720,"A cada 12 horas"],[1440,"Uma vez por dia"]].map(([v,l])=>`<option value="${v}" ${v===cur?"selected":""}>${l}</option>`).join("")})()}</select>
+  <p class="mut">Só abre a app em segundo plano quando o ficheiro mudou, e fecha-a logo a seguir. Não corre com a bateria fraca.</p>`:""}
   ${A?`
   ${hasFile?(()=>{const i=fileInfo(),mod=i.modified?new Date(i.modified).toLocaleDateString("pt-PT")+" "+new Date(i.modified).toLocaleTimeString("pt-PT",{hour:"2-digit",minute:"2-digit"}):"",kb=i.size!=null?(i.size/1024).toFixed(i.size<10240?1:0)+" KB":"";return `<div class="card" style="padding:10px;margin-bottom:10px"><div class="mut" style="font-size:12px">Ficheiro onde a app grava e recupera</div><div style="font-weight:600;word-break:break-all;margin:2px 0">📄 ${esc(i.name||"(sem nome)")}</div>${i.where?`<div class="mut">📁 ${esc(i.where)}</div>`:""}${mod||kb?`<div class="mut">Modificado: ${mod}${mod&&kb?" · ":""}${kb}</div>`:""}</div>`})():`<p><strong>Ficheiro de dados:</strong> nenhum escolhido</p>`}
   ${hasFile?`
@@ -1500,6 +1545,7 @@ function backup(){
   ${A?"":`<label>Importar cópia (substitui os dados atuais)</label><input type="file" id="im" accept=".json,application/json">`}
   <div class="acts"><button type="button" class="btn ghost" data-close>Fechar</button></div>`,()=>{});
   if(A){
+    d.querySelector("#imint")?.addEventListener("change",e=>{try{Android.setImportInterval(Number(e.target.value))}catch(x){}});
     d.querySelector("#afn").onclick=()=>Android.createFile();
     d.querySelector("#afo").onclick=()=>Android.pickFile();
     d.querySelector("#asv")?.addEventListener("click",()=>saveToFile(d));
@@ -1532,6 +1578,7 @@ function backup(){
     }catch(x){alert("Ficheiro inválido.")}
   };
 }
+if(SLAVE&&!HEADLESS)slaveWatch();
 render();init();
 </script>
 </body>
