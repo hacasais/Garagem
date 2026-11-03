@@ -82,8 +82,9 @@ main{width:100%;min-width:0;overflow-x:clip}
 <div id="bn" role="alert"></div><main id="app"></main>
 <div id="lb" onclick="this.style.display='none'"><img alt="Fotografia ampliada"></div>
 <script>
-const SLAVE=!!(window.Android&&Android.isSlave&&Android.isSlave());
-const HEADLESS=SLAVE&&/[?&]headless=1/.test(location.search);   // aberta pelo serviço em segundo plano (sem ecrã)
+const HEADLESS=/[?&]headless=1/.test(location.search);   // aberta pelo serviço em segundo plano (sem ecrã)
+// SLAVE = "seguir o ficheiro": a app importa-o regularmente (opção "Importar com a app fechada" ligada)
+let SLAVE=HEADLESS||!!(window.Android&&Android.importIntervalMin&&Android.importIntervalMin()>0);
 const ACTIONS=["Óleo motor","Filtro de óleo","Filtro de ar","Filtro do habitáculo","Filtro de combustível","Velas de ignição","Pastilhas de travão","Discos de travão","Líquido de travões","Líquido de refrigeração","Correia de acessórios","Kit de distribuição","Bateria","Escovas limpa-vidros","Lâmpadas","Pneus","Amortecedores","Embraiagem","Óleo da caixa","Óleo do diferencial","Alinhamento / geometria","Mão-de-obra"];
 const TYPES=["Revisão","Óleo e filtros","Pneus","Rotação de pneus","Travões","Bateria","Inspeção (IPO)","Seguro","Reparação","Alteração / extra","Lavagem / estética","Combustível","Outro"];
 const ASSETS=true,PH={},removed=new Set();
@@ -173,7 +174,9 @@ async function slaveSync(manual){
     return true;
   }catch(e){if(!HEADLESS)banner("Erro ao importar: "+(e.message||e),false);return false}
 }
+let _watching=false;
 function slaveWatch(){
+  if(_watching)return;_watching=true;
   document.addEventListener("visibilitychange",()=>{if(!document.hidden)slaveSync(false)});
   setInterval(()=>{if(!document.hidden)slaveSync(false)},15*60*1000);
 }
@@ -311,7 +314,7 @@ function heroTouchEnd(e){
 function listView(){
   const nActAll=S.vehicles.reduce((t,v)=>t+allAlerts(v).filter(a=>isActive(a,v)).length,0);
   const n=S.vehicles.reduce((s,v)=>s+allAlerts(v).filter(a=>near(a,v)).length,0);
-  return `<div class="top"><h1><span class="brand">RT</span>RLTEC Ativos${SLAVE?" · Slave":""}</h1><div style="display:flex;gap:6px">${S.vehicles.length>1?`<button class="btn ghost sm" onclick="compareAssets()">Comparar</button>`:""}<button class="btn ghost sm" onclick="alarmCenter()">🔔${nActAll?" "+nActAll:""}</button><button class="btn ghost sm" onclick="backup()">Cópia</button></div></div>
+  return `<div class="top"><h1><span class="brand">RT</span>RLTEC Ativos</h1><div style="display:flex;gap:6px">${S.vehicles.length>1?`<button class="btn ghost sm" onclick="compareAssets()">Comparar</button>`:""}<button class="btn ghost sm" onclick="alarmCenter()">🔔${nActAll?" "+nActAll:""}</button><button class="btn ghost sm" onclick="backup()">Cópia</button></div></div>
   ${bkNote()}
   ${n?`<p class="mut" style="margin:0 0 12px">${n} aviso${n>1?"s":""} nos próximos 2 meses (ou a menos de 2 000 km)</p>`:""}
   ${S.vehicles.length?S.vehicles.map(vcard).join(""):`<div class="empty">Ainda não tens nenhum ativo.<br>Adiciona o primeiro para começar a registar.</div>`}
@@ -836,6 +839,7 @@ function emailSheet(){
   let status="";try{status=Android.emailStatus()||""}catch(e){}
   const d=sheet(`<h2>✉️ Emails de alerta</h2>
   <label style="display:flex;gap:10px;align-items:center;margin-top:6px"><input type="checkbox" name="eon" ${c.on?"checked":""} style="width:22px;min-height:0"> Enviar emails de alerta (também com a app fechada)</label>
+  <label style="display:flex;gap:10px;align-items:center;margin-top:6px"><input type="checkbox" name="ehere" ${Android.emailsHere()?"checked":""} style="width:22px;min-height:0"> Este telemóvel envia os emails (desliga num segundo telemóvel para não receberes em duplicado)</label>
   <label>Destinatários (um por linha ou separados por vírgula)</label>
   <textarea name="eto" rows="3" placeholder="nome@exemplo.pt">${esc((c.to||[]).join("\n"))}</textarea>
   <label>Avisar quando faltarem (dias)</label><input name="edays" value="${(c.days||[]).join(", ")}">
@@ -871,6 +875,7 @@ function emailSheet(){
     const days=parseNums(f.get("edays")),km=parseNums(f.get("ekm"));
     meta.alertCfg={...(meta.alertCfg||{}),email:{on:!!f.get("eon"),to,days,km,overdueEvery:Math.max(0,Number(f.get("eover"))||0),hour:Math.min(23,Math.max(0,Number(f.get("ehour"))||0))}};
     meta.smtp=smtpFrom(f,ms);
+    try{Android.setEmailsHere(!!f.get("ehere"))}catch(e){}
     await saveMeta();
   });
   d.querySelector("#etest").onclick=()=>{
@@ -1528,9 +1533,8 @@ function backup(){
   const last=meta.lastBackup?new Date(meta.lastBackup).toLocaleDateString("pt-PT")+" "+new Date(meta.lastBackup).toLocaleTimeString("pt-PT",{hour:"2-digit",minute:"2-digit"}):"nunca";
   const A=!!window.Android,hasFile=A&&Android.hasFile(),pending=hasFile&&meta.fileArmed===false;
   const d=sheet(`<h2>Cópia de segurança</h2>
-  ${SLAVE?`<p class="mut">Versão slave: importa o ficheiro automaticamente, mesmo com a app fechada (de 3 em 3 horas), e sempre que abres a app.<br>Última importação: <strong>${meta.slaveLast?new Date(meta.slaveLast).toLocaleDateString("pt-PT")+" "+new Date(meta.slaveLast).toLocaleTimeString("pt-PT",{hour:"2-digit",minute:"2-digit"}):"nunca"}</strong></p>
-  <label>Importar com a app fechada</label><select id="imint">${(()=>{let cur=180;try{cur=Android.importIntervalMin()}catch(e){}return [[0,"Desligado"],[15,"A cada 15 minutos"],[30,"A cada 30 minutos"],[60,"A cada hora"],[120,"A cada 2 horas"],[180,"A cada 3 horas"],[360,"A cada 6 horas"],[720,"A cada 12 horas"],[1440,"Uma vez por dia"]].map(([v,l])=>`<option value="${v}" ${v===cur?"selected":""}>${l}</option>`).join("")})()}</select>
-  <p class="mut">Só abre a app em segundo plano quando o ficheiro mudou, e fecha-a logo a seguir. Não corre com a bateria fraca.</p>`:""}
+  ${A&&hasFile?`<label>Importar do ficheiro com a app fechada</label><select id="imint">${(()=>{let cur=0;try{cur=Android.importIntervalMin()}catch(e){}return [[0,"Desligado"],[15,"A cada 15 minutos"],[30,"A cada 30 minutos"],[60,"A cada hora"],[120,"A cada 2 horas"],[180,"A cada 3 horas"],[360,"A cada 6 horas"],[720,"A cada 12 horas"],[1440,"Uma vez por dia"]].map(([v,l])=>`<option value="${v}" ${v===cur?"selected":""}>${l}</option>`).join("")})()}</select>
+  <p class="mut">${SLAVE?`Última importação: <strong>${meta.slaveLast?new Date(meta.slaveLast).toLocaleDateString("pt-PT")+" "+new Date(meta.slaveLast).toLocaleTimeString("pt-PT",{hour:"2-digit",minute:"2-digit"}):"nunca"}</strong>. `:""}Serve para um segundo telemóvel seguir o ficheiro do principal. Só abre a app em segundo plano quando o ficheiro mudou e fecha-a logo a seguir; não corre com a bateria fraca.</p>`:""}
   ${A?`
   ${hasFile?(()=>{const i=fileInfo(),mod=i.modified?new Date(i.modified).toLocaleDateString("pt-PT")+" "+new Date(i.modified).toLocaleTimeString("pt-PT",{hour:"2-digit",minute:"2-digit"}):"",kb=i.size!=null?(i.size/1024).toFixed(i.size<10240?1:0)+" KB":"";return `<div class="card" style="padding:10px;margin-bottom:10px"><div class="mut" style="font-size:12px">Ficheiro onde a app grava e recupera</div><div style="font-weight:600;word-break:break-all;margin:2px 0">📄 ${esc(i.name||"(sem nome)")}</div>${i.where?`<div class="mut">📁 ${esc(i.where)}</div>`:""}${mod||kb?`<div class="mut">Modificado: ${mod}${mod&&kb?" · ":""}${kb}</div>`:""}</div>`})():`<p><strong>Ficheiro de dados:</strong> nenhum escolhido</p>`}
   ${hasFile?`
@@ -1545,7 +1549,16 @@ function backup(){
   ${A?"":`<label>Importar cópia (substitui os dados atuais)</label><input type="file" id="im" accept=".json,application/json">`}
   <div class="acts"><button type="button" class="btn ghost" data-close>Fechar</button></div>`,()=>{});
   if(A){
-    d.querySelector("#imint")?.addEventListener("change",e=>{try{Android.setImportInterval(Number(e.target.value))}catch(x){}});
+    d.querySelector("#imint")?.addEventListener("change",async e=>{
+      const v=Number(e.target.value),was=Android.importIntervalMin();
+      if(v>0&&was<=0){
+        if(!confirm("Ao ligar, os dados desta app passam a ser substituídos pelos do ficheiro sempre que ele mudar. Quer continuar?")){e.target.value=String(was);return}
+        Android.setImportInterval(v);SLAVE=true;slaveWatch();
+        meta.slaveSig="";meta.slaveHash="";meta.slaveLocal="";
+        d.remove();await slaveSync(true);return;
+      }
+      Android.setImportInterval(v);SLAVE=v>0;
+    });
     d.querySelector("#afn").onclick=()=>Android.createFile();
     d.querySelector("#afo").onclick=()=>Android.pickFile();
     d.querySelector("#asv")?.addEventListener("click",()=>saveToFile(d));

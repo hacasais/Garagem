@@ -50,12 +50,16 @@ class MainActivity : Activity() {
         @JavascriptInterface
         fun hasFile(): Boolean = fileUri() != null
 
+        // Este telemóvel envia os emails de alerta? (desligar num segundo telemóvel evita emails duplicados)
         @JavascriptInterface
-        fun isSlave(): Boolean = BuildConfig.SLAVE
+        fun emailsHere(): Boolean = !prefs.getBoolean("email_off", false)
+
+        @JavascriptInterface
+        fun setEmailsHere(on: Boolean) { prefs.edit().putBoolean("email_off", !on).apply() }
 
         // Intervalo da importação em segundo plano (minutos; 0 = desligada)
         @JavascriptInterface
-        fun importIntervalMin(): Int = prefs.getInt("import_min", 180)
+        fun importIntervalMin(): Int = prefs.getInt("import_min", 0)
 
         @JavascriptInterface
         fun setImportInterval(minutes: Int) {
@@ -351,10 +355,10 @@ class MainActivity : Activity() {
         // true enquanto a app está visível (a importação em segundo plano não corre nessa altura)
         @Volatile var visible = false
 
-        /** Agenda (ou cancela, se minutos <= 0) a importação em segundo plano da versão slave. Mínimo do Android: 15 min. */
+        /** Agenda (ou cancela, se minutos <= 0) a importação em segundo plano do ficheiro. Mínimo do Android: 15 min. */
         fun scheduleImport(ctx: android.content.Context, minutes: Int, policy: ExistingPeriodicWorkPolicy) {
             val wm = WorkManager.getInstance(ctx)
-            if (!BuildConfig.SLAVE || minutes <= 0) { wm.cancelUniqueWork("garagem_import_check"); return }
+            if (minutes <= 0) { wm.cancelUniqueWork("garagem_import_check"); return }
             val req = PeriodicWorkRequestBuilder<ImportWorker>(maxOf(15, minutes).toLong(), TimeUnit.MINUTES)
                 .setConstraints(Constraints.Builder().setRequiresBatteryNotLow(true).build())   // poupa bateria
                 .build()
@@ -428,8 +432,8 @@ class MainActivity : Activity() {
         val work = PeriodicWorkRequestBuilder<AlertWorker>(6, TimeUnit.HOURS).build()
         WorkManager.getInstance(this)
             .enqueueUniquePeriodicWork("garagem_alert_check", ExistingPeriodicWorkPolicy.KEEP, work)
-        // Versão slave: importa o ficheiro JSON com a app fechada, no intervalo escolhido pelo utilizador (por defeito 3 h)
-        if (BuildConfig.SLAVE) scheduleImport(this, prefs.getInt("import_min", 180), ExistingPeriodicWorkPolicy.KEEP)
+        // Importação do ficheiro JSON com a app fechada, no intervalo escolhido pelo utilizador (por defeito desligada)
+        scheduleImport(this, prefs.getInt("import_min", 0), ExistingPeriodicWorkPolicy.KEEP)
     }
 
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {

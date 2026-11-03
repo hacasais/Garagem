@@ -144,8 +144,8 @@ class AlertWorker(ctx: Context, params: WorkerParameters) : Worker(ctx, params) 
         }
 
         if (cfg.on && nowHour >= cfg.hour) runNotifications(due, cfg)
-        // A versão slave não envia emails (a principal já os envia; evita duplicados)
-        if (!BuildConfig.SLAVE) {
+        // Cada telemóvel pode ter os emails desligados (evita duplicados quando há dois telemóveis)
+        if (!applicationContext.getSharedPreferences("garagem", Context.MODE_PRIVATE).getBoolean("email_off", false)) {
             try { processEmails(emailCfg, smtpCfg, nowHour, today, todayStr) } catch (e: Exception) { }
         }
         return Result.success()

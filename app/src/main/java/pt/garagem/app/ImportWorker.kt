@@ -19,15 +19,15 @@ import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 
 /**
- * Versão slave: com a app fechada, abre a própria app num WebView invisível, que lê o ficheiro JSON
+ * Importação com a app fechada: com a app fechada, abre a própria app num WebView invisível, que lê o ficheiro JSON
  * e substitui os dados da app (a mesma rotina que corre quando abres a app). Os dados da app vivem
  * dentro do WebView, por isso é esta a forma de os atualizar sem a app estar aberta.
  */
 class ImportWorker(ctx: Context, params: WorkerParameters) : Worker(ctx, params) {
     override fun doWork(): Result {
-        if (!BuildConfig.SLAVE) return Result.success()
         if (MainActivity.visible) return Result.success()   // a app está aberta: ela própria sincroniza
         val prefs = applicationContext.getSharedPreferences("garagem", Context.MODE_PRIVATE)
+        if (prefs.getInt("import_min", 0) <= 0) return Result.success()   // importação desligada
         val uriStr = prefs.getString("uri", null) ?: return Result.success()   // ainda não há ficheiro escolhido
 
         // Poupança de bateria: só abre a app (WebView) se o ficheiro tiver mudado desde a última importação.
@@ -96,7 +96,8 @@ class HeadlessBridge(private val ctx: Context, private val latch: CountDownLatch
     private fun uri(): Uri? =
         ctx.getSharedPreferences("garagem", Context.MODE_PRIVATE).getString("uri", null)?.let { Uri.parse(it) }
 
-    @JavascriptInterface fun isSlave(): Boolean = true
+    @JavascriptInterface fun importIntervalMin(): Int =
+        ctx.getSharedPreferences("garagem", Context.MODE_PRIVATE).getInt("import_min", 0)
 
     @JavascriptInterface fun hasFile(): Boolean = uri() != null
 
