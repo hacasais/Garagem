@@ -67,3 +67,18 @@ dependencies {
     implementation("com.sun.mail:android-mail:1.6.7")
     implementation("com.sun.mail:android-activation:1.6.7")
 }
+
+// Com duas versões (master e slave) os APK ficam em pastas diferentes. Depois de compilar, copia-os para
+// app/build/outputs/apk/debug/ com nomes fixos, para qualquer workflow do GitHub os encontrar.
+afterEvaluate {
+    tasks.named("assembleDebug") {
+        doLast {
+            val out = layout.buildDirectory.get().asFile
+            val dest = File(out, "outputs/apk/debug").apply { mkdirs() }
+            File(out, "outputs/apk/master/debug/app-master-debug.apk").takeIf { it.exists() }
+                ?.copyTo(File(dest, "app-debug.apk"), overwrite = true)
+            File(out, "outputs/apk/slave/debug/app-slave-debug.apk").takeIf { it.exists() }
+                ?.copyTo(File(dest, "app-slave-debug.apk"), overwrite = true)
+        }
+    }
+}
