@@ -296,8 +296,8 @@ function render(){
   const v=cur();
   $("#app").innerHTML=v?vehicleView(v):listView();
 }
-const src=p=>p?(PH[p]||""):"";
-const thumb=v=>v.photo?`<img class="thumb" src="${src(v.photo)}" alt="">`:`<div class="thumb">🚗</div>`;
+const src=p=>{const id=p&&typeof p==="object"?p.id:p;return id?(PH[id]||""):""};
+const thumb=v=>{const u=v.photo?src(v.photo):"";return u?`<img class="thumb" src="${u}" alt="">`:`<div class="thumb">🚗</div>`};
 const near=(a,v)=>{const i=alertInfo(a,v);if(i.snoozed)return null;return((i.days!==null&&i.days<=60)||(i.kmL!==null&&i.kmL<=2000))?i:null};
 const openV=id=>{S.sel=id;S.tab="resumo";render()};
 let heroStartX=null,heroStartY=null;
@@ -576,7 +576,7 @@ function editVeh(id){
     const nu=f.get("unit");if(nu==="km"||nu==="horas"||nu==="none")o.unit=nu;
     Object.assign(o,{name:f.get("name"),plate:f.get("plate"),year:f.get("year"),km:unitOf(o)==="none"?oldKm:(Number(f.get("km"))||0)});
     if(unitOf(o)!=="none"&&o.km>0&&o.km!==oldKm)logKm(o,o.km);
-    if(p[0])o.photo=p[0];
+    if(p[0])o.photo=p[0].id;
     if(!id){S.vehicles.push(o);S.sel=o.id;S.tab="resumo"}
   });
 }
