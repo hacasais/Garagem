@@ -15,13 +15,13 @@ Como obter o APK (conta GitHub gratuita, feito num computador)
    Se o passo 3 falhar (vermelho), copia-me a mensagem de erro e eu corrijo.
 
 Primeira utilização
-1. Abre a app RLTEC Ativos > botão Cópia (ou "Escolher ficheiro" no aviso amarelo).
+1. Abre a app RLTEC Ativos > Definições > Cópia de segurança (ou "Escolher ficheiro" no aviso amarelo).
 2. "Criar ficheiro novo" (rltec-ativos-dados.json) numa pasta à tua escolha (Documentos, por exemplo).
 3. A partir daí, cada alteração atualiza esse ficheiro.
-4. Telemóvel novo: instala o APK, copia o ficheiro, abre Cópia > "Escolher existente" e aceita "carregar os dados do ficheiro".
+4. Telemóvel novo: instala o APK, copia o ficheiro, abre Definições > Cópia de segurança > "Escolher existente" e aceita "carregar os dados do ficheiro".
 
 Passar os dados da versão HTML
-- Na versão HTML: Cópia > Guardar / partilhar cópia (gera um .json).
+- Na versão HTML: Definições > Cópia de segurança > Guardar / partilhar cópia (gera um .json).
 - Na app: escolhe esse .json em "Escolher existente" e aceita carregar os dados.
 
 Notas
@@ -33,4 +33,4 @@ Avisos com a app fechada
 - Em segundo plano (a cada ~6 horas), a app lê o ficheiro de dados e verifica os avisos do plano de manutenção e os avisos manuais.
 - Só notifica quando algo está vencido, a menos de 14 dias, ou a menos de 500 km — para não incomodar com avisos distantes.
 - O Android pode atrasar esta verificação (poupança de bateria, "doze mode"), por isso não é um alarme exato ao minuto. Se o telemóvel tiver otimização de bateria agressiva para esta app, pode valer a pena desativá-la nas definições do sistema para o RLTEC Ativos/RLTecAuto.
-- Se nunca escolheste um ficheiro de dados (Cópia > Criar/Escolher), não há nada a verificar e não aparece nenhuma notificação.
+- Se nunca escolheste um ficheiro de dados (Definições > Cópia de segurança > Criar/Escolher), não há nada a verificar e não aparece nenhuma notificação.

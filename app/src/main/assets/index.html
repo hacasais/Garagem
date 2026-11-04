@@ -153,7 +153,7 @@ function fileSync(now){
     try{
       const txt=JSON.stringify(fileData()),ok=Android.saveFile(txt);
       if(ok){if(SLAVE){meta.slaveHash=hash32(txt);meta.slaveLocal=hash32(cj(S.vehicles))}meta.lastBackup=Date.now();tx("kv","readwrite",s=>s.put(meta,"meta")).catch(()=>{});banner("Guardado em "+fileLabel()+" às "+new Date().toLocaleTimeString("pt-PT",{hour:"2-digit",minute:"2-digit"}),true);setTimeout(()=>banner(""),3500)}
-      else banner("Não foi possível escrever no ficheiro. Escolhe-o outra vez em Cópia.");
+      else banner("Não foi possível escrever no ficheiro. Escolhe-o outra vez em Definições > Cópia de segurança.");
     }catch(e){banner("Erro ao escrever no ficheiro.")}
   },now?0:600);
 }
@@ -250,7 +250,7 @@ async function init(){
     if(SLAVE){
       let r=false;
       if(window.Android&&Android.hasFile())r=await slaveSync(false);
-      else if(!HEADLESS)banner("Escolhe o ficheiro de dados (botão Cópia) para a importação automática.",false);
+      else if(!HEADLESS)banner("Escolhe o ficheiro de dados (Definições > Cópia de segurança) para a importação automática.",false);
       if(HEADLESS){try{Android.headlessDone(r===true)}catch(e){}}
     }else syncMsToken();
     LOAD="ok";render();
@@ -321,7 +321,7 @@ function heroTouchEnd(e){
 function listView(){
   const nActAll=S.vehicles.reduce((t,v)=>t+allAlerts(v).filter(a=>isActive(a,v)).length,0);
   const n=S.vehicles.reduce((s,v)=>s+allAlerts(v).filter(a=>near(a,v)).length,0);
-  return `<div class="top"><h1><span class="brand">RT</span>RLTEC Ativos</h1><div style="display:flex;gap:6px">${S.vehicles.length>1?`<button class="btn ghost sm" onclick="compareAssets()">Comparar</button>`:""}<button class="btn ghost sm" onclick="alarmCenter()">🔔${nActAll?" "+nActAll:""}</button><button class="btn ghost sm" onclick="backup()">Cópia</button></div></div>
+  return `<div class="top"><h1><span class="brand">RT</span>RLTEC Ativos</h1><div style="display:flex;gap:6px">${S.vehicles.length>1?`<button class="btn ghost sm" onclick="compareAssets()">Comparar</button>`:""}<button class="btn ghost sm" onclick="alarmCenter()">🔔${nActAll?" "+nActAll:""}</button><button class="btn ghost sm" onclick="openSettings()">⚙ Definições</button></div></div>
   ${bkNote()}
   ${n?`<p class="mut" style="margin:0 0 12px">${n} aviso${n>1?"s":""} nos próximos 2 meses (ou a menos de 2 000 km)</p>`:""}
   ${listControls()}
@@ -1025,7 +1025,7 @@ function assetTypeOf(v){
   const t=assetTypes().find(x=>x.key===key),color=typeColorOf(key);
   return{key,label:t?shortType(t):(v.assetTypeLabel||"Outro"),color,fg:fgFor(color)};
 }
-function setTypeColor(k,c){meta.typeColors={...(meta.typeColors||{}),[k]:c};saveMeta();render()}
+function setTypeColor(k,c){meta.typeColors={...(meta.typeColors||{}),[k]:c};saveMeta();render();refreshSettings()}
 const listSort=()=>meta.listSort||"orig",listType=()=>meta.listType||"";
 function setListSort(v){meta.listSort=v;saveMetaQuiet();render()}
 function orderSheet(){
@@ -1037,7 +1037,7 @@ function orderSheet(){
     const rows=S.vehicles.map(v=>({v,n:Number(f.get("o_"+v.id))||1e9}));
     rows.sort((a,b)=>a.n-b.n||(a.v.name||"").localeCompare(b.v.name||"","pt"));
     rows.forEach((r,i)=>{r.v.order=i+1});
-    meta.listSort="manual";saveMetaQuiet();
+    meta.listSort="manual";saveMetaQuiet();refreshSettings();
   });
 }
 let _colSheet=null;
@@ -1048,7 +1048,30 @@ function colorSheet(){
   ${assetTypes().map(t=>`<div class="card"><div class="row" style="align-items:center;gap:10px"><input type="color" value="${typeColorOf(t.key)}" onchange="setTypeColor('${t.key}',this.value)" style="flex:none;width:46px;min-height:40px;padding:2px" aria-label="Cor"><div style="flex:1;min-width:0"><strong>${esc(shortType(t))}</strong><div class="mut">${used.get(t.key)||0} ativo${(used.get(t.key)||0)===1?"":"s"}</div></div>${TYPE_COLORS[t.key]?`<button type="button" class="btn ghost sm" onclick="resetTypeColor('${t.key}')">Repor</button>`:""}</div></div>`).join("")}
   <div class="acts"><button type="button" class="btn" data-close>Fechar</button></div>`,()=>{});
 }
-function resetTypeColor(k){const c={...(meta.typeColors||{})};delete c[k];meta.typeColors=c;saveMeta();render();colorSheet()}
+function resetTypeColor(k){const c={...(meta.typeColors||{})};delete c[k];meta.typeColors=c;saveMeta();render();refreshSettings();colorSheet()}
+// ===== Definições: um só sítio para a lista de ativos, os avisos e os dados =====
+let _setSheet=null;
+function settingsHtml(){
+  const A=!!window.Android;let fn="";try{if(A&&Android.hasFile())fn=Android.fileName()||""}catch(e){}
+  const nAct=S.vehicles.reduce((t,v)=>t+allAlerts(v).filter(a=>isActive(a,v)).length,0);
+  const nSn=S.vehicles.reduce((t,v)=>t+allAlerts(v).filter(a=>alertInfo(a,v).snoozed).length,0);
+  const ec=emailCfg(),dots=assetTypes().slice(0,8).map(t=>`<i style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${typeColorOf(t.key)};margin-right:4px"></i>`).join("");
+  const sec=t=>`<h3 style="margin:18px 0 8px;font-size:12px;text-transform:uppercase;letter-spacing:.08em;color:var(--mut)">${t}</h3>`;
+  const row=(ic,t,sub,fn)=>`<div class="card" role="button" tabindex="0" style="cursor:pointer;padding:12px" onclick="${fn}"><div class="row" style="align-items:center;gap:12px"><span style="font-size:20px;width:26px;text-align:center">${ic}</span><div style="flex:1;min-width:0"><strong>${t}</strong><div class="mut" style="font-size:13px">${sub}</div></div><span class="chev">›</span></div></div>`;
+  return `<h2>Definições</h2>`+
+  sec("Lista de ativos")+
+  row("↕","Ordem dos ativos",listSort()==="manual"?"Ordem definida por ti (1, 2, 3…)":"Define a posição de cada ativo: 1, 2, 3…","orderSheet()")+
+  row("🎨","Cores dos tipos de ativo",dots+" Muda a cor de um tipo em todos os ativos","colorSheet()")+
+  row("🏷","Tipos de ativo","Criar, apagar e escolher a unidade (km, horas, tempo)","manageAssetTypes()")+
+  sec("Avisos")+
+  row("🔔","Alarmes",`${nAct} ativo${nAct===1?"":"s"}${nSn?` · ${nSn} adiado${nSn>1?"s":""}`:""} · antecedência e notificações`,"alarmCenter()")+
+  row("✉️","Emails de alerta",ec.on?`Ligado · ${(ec.to||[]).length} destinatário${(ec.to||[]).length===1?"":"s"}`:"Desligado","emailSheet()")+
+  sec("Dados")+
+  row("💾","Cópia de segurança e ficheiro",A?(fn?esc(fn):"Nenhum ficheiro escolhido"):"Exportar e importar uma cópia","backup()")+
+  `<div class="acts"><button type="button" class="btn" onclick="this.closest('.sheet').remove()">Fechar</button></div>`;
+}
+function openSettings(){_setSheet&&_setSheet.remove();_setSheet=sheet(settingsHtml(),()=>{})}
+function refreshSettings(){if(_setSheet&&_setSheet.isConnected)_setSheet.querySelector("form").innerHTML=settingsHtml()}
 function setListType(k){meta.listType=k;saveMetaQuiet();render()}
 function listOrder(){
   const present=new Set(S.vehicles.map(v=>assetTypeOf(v).key));
@@ -1072,18 +1095,19 @@ function listControls(){
   const types=[...new Map(S.vehicles.map(v=>{const t=assetTypeOf(v);return[t.key,t]})).values()].sort((a,b)=>a.label.localeCompare(b.label,"pt"));
   const ft=types.some(t=>t.key===listType())?listType():"",cnt=k=>S.vehicles.filter(v=>assetTypeOf(v).key===k).length;
   return(types.length>1?`<div class="fchips"><button class="fchip" aria-pressed="${ft===""}" onclick="setListType('')">Todos ${S.vehicles.length}</button>${types.map(t=>`<button class="fchip" aria-pressed="${ft===t.key}" onclick="setListType('${t.key}')"><i style="background:${t.color}"></i>${esc(t.label)} ${cnt(t.key)}</button>`).join("")}</div>`:"")+
-  `<div class="sortrow"><span>Ordenar</span><select onchange="setListSort(this.value)">${[["orig","Ordem de criação"],["manual","Ordem definida por mim (1, 2, 3…)"],["nome","Nome (A–Z)"],["tipo","Tipo de ativo"],["avisos","Avisos mais urgentes"],["recente","Atividade recente"]].map(([v,l])=>`<option value="${v}" ${v===listSort()?"selected":""}>${l}</option>`).join("")}</select></div><div class="acts" style="margin:-2px 0 12px;flex-wrap:wrap"><button class="btn ghost sm" onclick="orderSheet()">Definir ordem 1, 2, 3…</button><button class="btn ghost sm" onclick="colorSheet()">🎨 Cores dos tipos</button></div>`;
+  `<div class="sortrow"><span>Ordenar</span><select onchange="setListSort(this.value)">${[["orig","Ordem de criação"],["manual","Ordem definida por mim (1, 2, 3…)"],["nome","Nome (A–Z)"],["tipo","Tipo de ativo"],["avisos","Avisos mais urgentes"],["recente","Atividade recente"]].map(([v,l])=>`<option value="${v}" ${v===listSort()?"selected":""}>${l}</option>`).join("")}</select></div>`;
 }
+let _atSheet=null,_atEdit=null;
 function manageAssetTypes(){
-  document.querySelectorAll(".sheet").forEach(s=>s.remove());
+  _atSheet&&_atSheet.remove();_atEdit&&_atEdit.remove();
   const types=assetTypes();
-  const d=sheet(`<h2>Gerir tipos de ativo</h2><p class="mut">Cada tipo define a unidade do contador (km, horas, ou só por tempo) e um plano de manutenção inicial, para não teres de o recriar de cada vez que adicionas um ativo desse tipo.</p>
+  const d=_atSheet=sheet(`<h2>Gerir tipos de ativo</h2><p class="mut">Cada tipo define a unidade do contador (km, horas, ou só por tempo) e um plano de manutenção inicial, para não teres de o recriar de cada vez que adicionas um ativo desse tipo.</p>
   ${types.map((t,i)=>`<div class="card"><div class="row"><input type="color" value="${typeColorOf(t.key)}" onchange="setTypeColor('${t.key}',this.value)" style="flex:none;width:42px;min-height:38px;padding:2px" aria-label="Cor do tipo"><div style="flex:1;margin:0 10px"><strong>${esc(t.label)}</strong><div class="mut">${UNIT_NAME[t.unit]} · ${t.plan.length} intervenção(ões) predefinida(s)</div></div>${i<3?`<span class="mut">fixo</span>`:`<button type="button" class="btn del sm" onclick="removeAssetType(${i-3})">Apagar</button>`}</div></div>`).join("")}
   <div class="acts"><button type="button" class="btn ghost" data-close>Fechar</button><button type="button" class="btn" onclick="editAssetType()">+ Tipo de ativo</button></div>`,()=>{});
 }
 function editAssetType(){
-  document.querySelectorAll(".sheet").forEach(s=>s.remove());
-  sheet(`<h2>Novo tipo de ativo</h2>
+  _atSheet&&_atSheet.remove();_atEdit&&_atEdit.remove();
+  _atEdit=sheet(`<h2>Novo tipo de ativo</h2>
   <label>Nome do tipo</label><input name="label" required placeholder="Ex.: Recuperador de calor">
   <label>Cor de identificação</label><input name="color" type="color" value="${TYPE_PALETTE[(meta.assetTypesCustom||[]).length%TYPE_PALETTE.length]}" style="width:64px;min-height:40px;padding:2px">
   <label>Contador</label>
